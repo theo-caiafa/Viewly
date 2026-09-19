@@ -51,6 +51,26 @@ export function zoneSelector(index: number): string {
   return `[${ATTRIBUTE}="${index}"]`;
 }
 
+/**
+ * Runs in the browser context, after tagZones(). A fixed/sticky element
+ * (nav bar, chat widget, cookie banner...) stays glued to the viewport
+ * while we scroll each zone into view, so it can bleed into an unrelated
+ * zone's screenshot at whatever scroll position it happens to be captured.
+ * Hide every such element except the ones we're deliberately capturing as
+ * their own zone (e.g. a real <header> landmark), so it still gets its own
+ * clean screenshot when its turn comes.
+ */
+export function hideFloatingOverlays(): void {
+  const elements = document.querySelectorAll<HTMLElement>("body *");
+  for (const el of elements) {
+    if (el.hasAttribute("data-viewly-zone")) continue;
+    const position = getComputedStyle(el).position;
+    if (position === "fixed" || position === "sticky") {
+      el.style.setProperty("display", "none", "important");
+    }
+  }
+}
+
 export function labelZones(zones: ZoneDescriptor[]): { zone: ZoneDescriptor; label: string }[] {
   const seenCounts = new Map<string, number>();
   return zones.map((zone) => {

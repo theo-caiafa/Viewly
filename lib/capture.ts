@@ -1,6 +1,7 @@
 import { chromium, type Browser, type Page } from "playwright";
 import { attemptDismissCookieBanners, hideConsentOverlays } from "./cookieBanners";
-import { tagZones, zoneSelector, labelZones } from "./zones";
+import { tagZones, zoneSelector, labelZones, hideFloatingOverlays } from "./zones";
+import { composeSections } from "./composeSections";
 
 export type CaptureMode = "full" | "sections";
 export type CaptureQuality = "standard" | "high";
@@ -57,28 +58,29 @@ async function captureFull(page: Page): Promise<Buffer> {
   return page.screenshot({ fullPage: true, type: "png", animations: "disabled" });
 }
 
-async function captureSections(page: Page): Promise<{ label: string; buffer: Buffer }[]> {
+async function captureSections(page: Page, deviceScaleFactor: number): Promise<Buffer> {
   const zones = await page.evaluate(tagZones);
+  await page.evaluate(hideFloatingOverlays);
   const labeled = labelZones(zones);
-  const results: { label: string; buffer: Buffer }[] = [];
+  const buffers: Buffer[] = [];
 
-  for (const { zone, label } of labeled) {
+  for (const { zone } of labeled) {
     try {
       await hideConsentOverlays(page);
       const buffer = await page
         .locator(zoneSelector(zone.index))
         .screenshot({ type: "png", animations: "disabled", timeout: 8_000 });
-      results.push({ label, buffer });
+      buffers.push(buffer);
     } catch {
       // element vanished or is unreachable (e.g. hidden by a script) — skip it
     }
   }
 
-  if (results.length === 0) {
-    results.push({ label: "Page complète", buffer: await captureFull(page) });
+  if (buffers.length === 0) {
+    return captureFull(page);
   }
 
-  return results;
+  return composeSections(buffers, deviceScaleFactor);
 }
 
 async function captureOne(
@@ -86,10 +88,11 @@ async function captureOne(
   url: string,
   viewport: ViewportConfig,
   options: Required<CaptureOptions>,
-): Promise<MockupImage[]> {
+): Promise<MockupImage> {
+  const deviceScaleFactor = DEVICE_SCALE_FACTOR[options.quality];
   const context = await browser.newContext({
     viewport: { width: viewport.width, height: viewport.height },
-    deviceScaleFactor: DEVICE_SCALE_FACTOR[options.quality],
+    deviceScaleFactor,
   });
   const page = await context.newPage();
 
@@ -98,16 +101,12 @@ async function captureOne(
     await attemptDismissCookieBanners(page);
     await autoScroll(page);
 
-    if (options.mode === "full") {
-      const buffer = await captureFull(page);
-      return [{ label: viewport.label, buffer }];
-    }
+    const buffer =
+      options.mode === "full"
+        ? await captureFull(page)
+        : await captureSections(page, deviceScaleFactor);
 
-    const sections = await captureSections(page);
-    return sections.map((section) => ({
-      label: `${viewport.label}-${section.label}`,
-      buffer: section.buffer,
-    }));
+    return { label: viewport.label, buffer };
   } finally {
     await context.close();
   }
@@ -135,10 +134,9 @@ export async function captureMockups(
 
   const browser = await chromium.launch();
   try {
-    const results = await Promise.all(
+    return await Promise.all(
       VIEWPORTS.map((viewport) => captureOne(browser, url, viewport, resolvedOptions)),
     );
-    return results.flat();
   } finally {
     await browser.close();
   }

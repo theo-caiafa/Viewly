@@ -18,11 +18,6 @@ const DEVICE_LABELS: Record<string, string> = {
 
 const DEVICE_ORDER = ["desktop", "tablet", "mobile"];
 
-function parseLabel(raw: string): { device: string; section?: string } {
-  const [device, ...rest] = raw.split("-");
-  return { device, section: rest.length > 0 ? rest.join("-") : undefined };
-}
-
 function downloadDataUrl(dataUrl: string, filename: string) {
   const link = document.createElement("a");
   link.href = dataUrl;
@@ -67,14 +62,9 @@ export default function Home() {
     }
   }
 
-  const byDevice = new Map<string, MockupResult[]>();
-  for (const image of images) {
-    const { device } = parseLabel(image.label);
-    const list = byDevice.get(device) ?? [];
-    list.push(image);
-    byDevice.set(device, list);
-  }
-  const devices = DEVICE_ORDER.filter((device) => byDevice.has(device));
+  const orderedImages = DEVICE_ORDER.map((device) =>
+    images.find((image) => image.label === device),
+  ).filter((image): image is MockupResult => image !== undefined);
 
   return (
     <div className="min-h-screen bg-zinc-50 px-6 py-16 dark:bg-black">
@@ -170,7 +160,7 @@ export default function Home() {
           </p>
         )}
 
-        {images.length > 0 && (
+        {orderedImages.length > 0 && (
           <div className="flex flex-col gap-6">
             <div className="flex justify-end">
               <button
@@ -181,39 +171,23 @@ export default function Home() {
               </button>
             </div>
             <div className="grid gap-6 sm:grid-cols-3">
-              {devices.map((device) => (
-                <div key={device} className="flex flex-col gap-4">
+              {orderedImages.map((image) => (
+                <div
+                  key={image.label}
+                  className="flex flex-col gap-2 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950"
+                >
                   <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    {DEVICE_LABELS[device] ?? device}
+                    {DEVICE_LABELS[image.label] ?? image.label}
                   </span>
-                  {(byDevice.get(device) ?? []).map((image) => {
-                    const { section } = parseLabel(image.label);
-                    return (
-                      <div
-                        key={image.label}
-                        className="flex flex-col gap-2 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950"
-                      >
-                        {section && (
-                          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                            {section}
-                          </span>
-                        )}
-                        <div className="max-h-80 overflow-y-auto rounded border border-zinc-100 dark:border-zinc-800">
-                          <img
-                            src={image.dataUrl}
-                            alt={`Mockup ${image.label}`}
-                            className="w-full"
-                          />
-                        </div>
-                        <button
-                          onClick={() => downloadDataUrl(image.dataUrl, `${image.label}.png`)}
-                          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
-                        >
-                          Télécharger
-                        </button>
-                      </div>
-                    );
-                  })}
+                  <div className="max-h-80 overflow-y-auto rounded border border-zinc-100 dark:border-zinc-800">
+                    <img src={image.dataUrl} alt={`Mockup ${image.label}`} className="w-full" />
+                  </div>
+                  <button
+                    onClick={() => downloadDataUrl(image.dataUrl, `${image.label}.png`)}
+                    className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+                  >
+                    Télécharger
+                  </button>
                 </div>
               ))}
             </div>
