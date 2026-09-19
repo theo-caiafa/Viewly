@@ -1,18 +1,42 @@
-import { chromium, type Browser, type Page } from "playwright";
-import { attemptDismissCookieBanners, hideConsentOverlays } from "./cookieBanners";
+import type { Page } from "playwright";
+import { attemptDismissCookieBanners, hideKnownOverlays } from "./cookieBanners";
+import { getSharedBrowser } from "./browserManager";
 
 export type CaptureMode = "full" | "sections";
 export type CaptureQuality = "standard" | "high";
+
+export class CaptureCancelledError extends Error {
+  constructor() {
+    super("Génération annulée.");
+    this.name = "CaptureCancelledError";
+  }
+}
 
 export interface HttpCredentials {
   username: string;
   password: string;
 }
 
+export interface DeviceConfig {
+  label: string;
+  width: number;
+  height: number;
+}
+
+export interface ProgressEvent {
+  device: string;
+  current: number;
+  total: number;
+}
+
 export interface CaptureOptions {
   mode?: CaptureMode;
   quality?: CaptureQuality;
   httpCredentials?: HttpCredentials;
+  devices?: DeviceConfig[];
+  onProgress?: (event: ProgressEvent) => void;
+  onWarning?: (message: string) => void;
+  isCancelled?: () => boolean;
 }
 
 export interface MockupImage {
@@ -20,19 +44,21 @@ export interface MockupImage {
   buffer: Buffer;
 }
 
-interface ViewportConfig {
-  label: string;
-  width: number;
-  height: number;
-}
-
-const VIEWPORTS: ViewportConfig[] = [
+export const DEFAULT_DEVICES: DeviceConfig[] = [
   { label: "desktop", width: 1440, height: 900 },
   { label: "tablet", width: 768, height: 1024 },
   { label: "mobile", width: 375, height: 812 },
 ];
 
 const NAV_TIMEOUT_MS = 30_000;
+const LONG_PAGE_SCREEN_THRESHOLD = 8;
+
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+const BLOCK_TITLE_PATTERNS =
+  /just a moment|attention required|checking your browser|access denied|are you a robot|verify you are human|captcha/i;
 
 const DEVICE_SCALE_FACTOR: Record<CaptureQuality, number> = {
   standard: 1,
@@ -43,6 +69,62 @@ interface ResolvedCaptureOptions {
   mode: CaptureMode;
   quality: CaptureQuality;
   httpCredentials?: HttpCredentials;
+  devices: DeviceConfig[];
+  onProgress: (event: ProgressEvent) => void;
+  onWarning: (message: string) => void;
+  isCancelled: () => boolean;
+}
+
+function checkCancelled(isCancelled: () => boolean): void {
+  if (isCancelled()) {
+    throw new CaptureCancelledError();
+  }
+}
+
+function classifyNavigationError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED/.test(message)) {
+    return new Error("Nom de domaine introuvable — vérifie l'URL.");
+  }
+  if (/ERR_CONNECTION_REFUSED|ERR_CONNECTION_TIMED_OUT|ERR_CONNECTION_CLOSED/.test(message)) {
+    return new Error("Impossible de se connecter au site (connexion refusée).");
+  }
+  if (/Timeout.*exceeded/i.test(message)) {
+    return new Error("Le site a mis trop de temps à répondre (délai dépassé).");
+  }
+  return new Error(`Impossible de charger la page : ${message}`);
+}
+
+async function detectBlockChallenge(page: Page): Promise<void> {
+  const title = await page.title();
+  if (BLOCK_TITLE_PATTERNS.test(title)) {
+    throw new Error("Le site semble bloquer les navigateurs automatisés (protection anti-bot détectée).");
+  }
+}
+
+/**
+ * Give web fonts and in-viewport images a moment to finish loading before a
+ * screenshot, so we don't capture a fallback-font flash or a half-loaded
+ * image. Capped at 3s so one stuck resource can't stall the whole capture.
+ */
+async function waitForVisualReadiness(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const fontsReady = document.fonts ? document.fonts.ready : Promise.resolve();
+    const imagesReady = Promise.all(
+      Array.from(document.images).map((img) =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => {
+              img.addEventListener("load", () => resolve(), { once: true });
+              img.addEventListener("error", () => resolve(), { once: true });
+            }),
+      ),
+    );
+    await Promise.race([
+      Promise.all([fontsReady, imagesReady]),
+      new Promise((resolve) => setTimeout(resolve, 3000)),
+    ]);
+  });
 }
 
 async function autoScroll(page: Page): Promise<void> {
@@ -83,9 +165,14 @@ async function settleAnimations(page: Page): Promise<void> {
   });
 }
 
-async function captureFull(page: Page): Promise<Buffer> {
+async function prepareForScreenshot(page: Page): Promise<void> {
+  await waitForVisualReadiness(page);
   await settleAnimations(page);
-  await hideConsentOverlays(page);
+  await hideKnownOverlays(page);
+}
+
+async function captureFull(page: Page): Promise<Buffer> {
+  await prepareForScreenshot(page);
   return page.screenshot({ fullPage: true, type: "png", animations: "disabled" });
 }
 
@@ -95,7 +182,14 @@ async function captureFull(page: Page): Promise<Buffer> {
  * section boundary. The last frame is clamped to the bottom of the page so
  * it stays full-height instead of trailing off into blank space.
  */
-async function captureScreens(page: Page, viewportHeight: number): Promise<Buffer[]> {
+async function captureScreens(
+  page: Page,
+  viewportHeight: number,
+  device: string,
+  onProgress: (event: ProgressEvent) => void,
+  onWarning: (message: string) => void,
+  isCancelled: () => boolean,
+): Promise<Buffer[]> {
   const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
 
   const positions: number[] = [];
@@ -108,49 +202,92 @@ async function captureScreens(page: Page, viewportHeight: number): Promise<Buffe
     positions[positions.length - 1] = Math.max(scrollHeight - viewportHeight, 0);
   }
 
+  if (positions.length > LONG_PAGE_SCREEN_THRESHOLD) {
+    onWarning(
+      `Page longue détectée pour ${device} (~${positions.length} écrans) — la génération va prendre plus de temps.`,
+    );
+  }
+
   const buffers: Buffer[] = [];
-  for (const position of positions) {
-    await page.evaluate((scrollY) => window.scrollTo(0, scrollY), position);
+  for (let i = 0; i < positions.length; i++) {
+    checkCancelled(isCancelled);
+    onProgress({ device, current: i, total: positions.length });
+
+    await page.evaluate((scrollY) => window.scrollTo(0, scrollY), positions[i]);
     await page.waitForTimeout(300);
-    await settleAnimations(page);
-    await hideConsentOverlays(page);
+    await prepareForScreenshot(page);
     const buffer = await page.screenshot({ type: "png", animations: "disabled" });
     buffers.push(buffer);
   }
 
+  onProgress({ device, current: positions.length, total: positions.length });
   return buffers;
 }
 
 async function captureOne(
-  browser: Browser,
   url: string,
-  viewport: ViewportConfig,
+  device: DeviceConfig,
   options: ResolvedCaptureOptions,
 ): Promise<MockupImage[]> {
+  checkCancelled(options.isCancelled);
+  options.onProgress({ device: device.label, current: 0, total: 0 });
+
+  const browser = await getSharedBrowser();
   const context = await browser.newContext({
-    viewport: { width: viewport.width, height: viewport.height },
+    viewport: { width: device.width, height: device.height },
     deviceScaleFactor: DEVICE_SCALE_FACTOR[options.quality],
     reducedMotion: "reduce",
+    userAgent: USER_AGENT,
     httpCredentials: options.httpCredentials,
   });
   const page = await context.newPage();
 
-  try {
-    await page.goto(url, { waitUntil: "networkidle", timeout: NAV_TIMEOUT_MS });
-    await attemptDismissCookieBanners(page);
-    await autoScroll(page);
+  // Cancellation can arrive while we're mid-await inside Playwright (goto,
+  // screenshot...) where a simple flag check between steps wouldn't help.
+  // Closing the context forces whatever is in flight to reject immediately.
+  let cancelledMidFlight = false;
+  const cancelWatcher = setInterval(() => {
+    if (options.isCancelled()) {
+      cancelledMidFlight = true;
+      clearInterval(cancelWatcher);
+      context.close().catch(() => {});
+    }
+  }, 250);
 
-    if (options.mode === "full") {
-      return [{ label: viewport.label, buffer: await captureFull(page) }];
+  try {
+    try {
+      await page.goto(url, { waitUntil: "networkidle", timeout: NAV_TIMEOUT_MS });
+    } catch (error) {
+      throw classifyNavigationError(error);
     }
 
-    const screens = await captureScreens(page, viewport.height);
+    await detectBlockChallenge(page);
+    await attemptDismissCookieBanners(page);
+    await autoScroll(page);
+    checkCancelled(options.isCancelled);
+
+    if (options.mode === "full") {
+      return [{ label: device.label, buffer: await captureFull(page) }];
+    }
+
+    const screens = await captureScreens(
+      page,
+      device.height,
+      device.label,
+      options.onProgress,
+      options.onWarning,
+      options.isCancelled,
+    );
     return screens.map((buffer, index) => ({
-      label: `${viewport.label}-${index + 1}`,
+      label: `${device.label}-${index + 1}`,
       buffer,
     }));
+  } catch (error) {
+    if (cancelledMidFlight) throw new CaptureCancelledError();
+    throw error;
   } finally {
-    await context.close();
+    clearInterval(cancelWatcher);
+    await context.close().catch(() => {});
   }
 }
 
@@ -173,15 +310,14 @@ export async function captureMockups(
     mode: options.mode ?? "full",
     quality: options.quality ?? "standard",
     httpCredentials: options.httpCredentials,
+    devices: options.devices && options.devices.length > 0 ? options.devices : DEFAULT_DEVICES,
+    onProgress: options.onProgress ?? (() => {}),
+    onWarning: options.onWarning ?? (() => {}),
+    isCancelled: options.isCancelled ?? (() => false),
   };
 
-  const browser = await chromium.launch();
-  try {
-    const results = await Promise.all(
-      VIEWPORTS.map((viewport) => captureOne(browser, url, viewport, resolvedOptions)),
-    );
-    return results.flat();
-  } finally {
-    await browser.close();
-  }
+  const results = await Promise.all(
+    resolvedOptions.devices.map((device) => captureOne(url, device, resolvedOptions)),
+  );
+  return results.flat();
 }
