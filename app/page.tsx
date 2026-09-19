@@ -26,7 +26,7 @@ interface JobPayload {
 type Mode = "full" | "sections";
 type Quality = "standard" | "high";
 type DeviceId = "desktop" | "tablet" | "mobile";
-type ResolutionPreset = "1440x900" | "1920x1080" | "1366x768" | "custom";
+type ResolutionPreset = "1440x900" | "1920x1080" | "custom";
 
 const DEVICE_LABELS: Record<string, string> = {
   desktop: "Desktop",
@@ -39,7 +39,6 @@ const DEVICE_ORDER: DeviceId[] = ["desktop", "tablet", "mobile"];
 const RESOLUTION_PRESETS: Record<Exclude<ResolutionPreset, "custom">, { width: number; height: number }> = {
   "1440x900": { width: 1440, height: 900 },
   "1920x1080": { width: 1920, height: 1080 },
-  "1366x768": { width: 1366, height: 768 },
 };
 
 const POLL_INTERVAL_MS = 1000;
@@ -331,7 +330,6 @@ export default function Home() {
                 >
                   <option value="1440x900">Desktop 1440×900</option>
                   <option value="1920x1080">Desktop 1920×1080</option>
-                  <option value="1366x768">Desktop 1366×768</option>
                   <option value="custom">Personnalisé</option>
                 </select>
                 {resolution === "custom" && (
