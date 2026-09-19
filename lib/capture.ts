@@ -51,7 +51,28 @@ async function autoScroll(page: Page): Promise<void> {
   });
 }
 
+/**
+ * animations:"disabled" on page.screenshot() only freezes CSS
+ * animations/transitions. Scroll-triggered reveal effects (fade-in,
+ * slide-in libraries like AOS or Framer Motion) are still mid-flight at
+ * that point, so force every currently running animation the browser
+ * knows about (CSS or Web Animations API) to jump to its end state.
+ */
+async function settleAnimations(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    for (const animation of document.getAnimations()) {
+      try {
+        animation.finish();
+      } catch {
+        // infinite animations (looping spinners, background gradients)
+        // throw on finish() — leave those running, they're decorative
+      }
+    }
+  });
+}
+
 async function captureFull(page: Page): Promise<Buffer> {
+  await settleAnimations(page);
   await hideConsentOverlays(page);
   return page.screenshot({ fullPage: true, type: "png", animations: "disabled" });
 }
@@ -78,7 +99,8 @@ async function captureScreens(page: Page, viewportHeight: number): Promise<Buffe
   const buffers: Buffer[] = [];
   for (const position of positions) {
     await page.evaluate((scrollY) => window.scrollTo(0, scrollY), position);
-    await page.waitForTimeout(150);
+    await page.waitForTimeout(300);
+    await settleAnimations(page);
     await hideConsentOverlays(page);
     const buffer = await page.screenshot({ type: "png", animations: "disabled" });
     buffers.push(buffer);
@@ -96,6 +118,7 @@ async function captureOne(
   const context = await browser.newContext({
     viewport: { width: viewport.width, height: viewport.height },
     deviceScaleFactor: DEVICE_SCALE_FACTOR[options.quality],
+    reducedMotion: "reduce",
   });
   const page = await context.newPage();
 
