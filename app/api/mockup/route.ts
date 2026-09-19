@@ -9,14 +9,20 @@ const VALID_MODES: CaptureMode[] = ["full", "sections"];
 const VALID_QUALITIES: CaptureQuality[] = ["standard", "high"];
 
 export async function POST(request: NextRequest) {
-  let body: { url?: unknown; mode?: unknown; quality?: unknown };
+  let body: {
+    url?: unknown;
+    mode?: unknown;
+    quality?: unknown;
+    username?: unknown;
+    password?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Corps de requête invalide." }, { status: 400 });
   }
 
-  const { url, mode, quality } = body;
+  const { url, mode, quality, username, password } = body;
 
   if (typeof url !== "string" || url.trim().length === 0) {
     return NextResponse.json({ error: "Merci de fournir une URL." }, { status: 400 });
@@ -30,10 +36,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Niveau de qualité invalide." }, { status: 400 });
   }
 
+  const hasUsername = typeof username === "string" && username.length > 0;
+  const hasPassword = typeof password === "string" && password.length > 0;
+  if (hasUsername !== hasPassword) {
+    return NextResponse.json(
+      { error: "Renseigne à la fois l'identifiant et le mot de passe, ou aucun des deux." },
+      { status: 400 },
+    );
+  }
+
   try {
     const images = await captureMockups(url, {
       mode: mode as CaptureMode | undefined,
       quality: quality as CaptureQuality | undefined,
+      httpCredentials:
+        hasUsername && hasPassword
+          ? { username: username as string, password: password as string }
+          : undefined,
     });
     const zip = await buildZip(images);
 

@@ -34,6 +34,9 @@ export default function Home() {
   const [url, setUrl] = useState("");
   const [mode, setMode] = useState<Mode>("full");
   const [quality, setQuality] = useState<Quality>("standard");
+  const [showAuth, setShowAuth] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [images, setImages] = useState<MockupResult[]>([]);
@@ -50,7 +53,13 @@ export default function Home() {
       const response = await fetch("/api/mockup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, mode, quality }),
+        body: JSON.stringify({
+          url,
+          mode,
+          quality,
+          username: showAuth ? username : undefined,
+          password: showAuth ? password : undefined,
+        }),
       });
       const data = await response.json();
 
@@ -154,6 +163,34 @@ export default function Home() {
                 Haute qualité
               </label>
             </fieldset>
+          </div>
+
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowAuth((v) => !v)}
+              className="text-xs text-zinc-500 underline underline-offset-2 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+            >
+              Site protégé par mot de passe ?
+            </button>
+            {showAuth && (
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                <input
+                  type="text"
+                  placeholder="Identifiant"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+                <input
+                  type="password"
+                  placeholder="Mot de passe"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+              </div>
+            )}
           </div>
 
           {loading && (

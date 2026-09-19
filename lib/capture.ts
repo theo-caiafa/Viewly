@@ -4,9 +4,15 @@ import { attemptDismissCookieBanners, hideConsentOverlays } from "./cookieBanner
 export type CaptureMode = "full" | "sections";
 export type CaptureQuality = "standard" | "high";
 
+export interface HttpCredentials {
+  username: string;
+  password: string;
+}
+
 export interface CaptureOptions {
   mode?: CaptureMode;
   quality?: CaptureQuality;
+  httpCredentials?: HttpCredentials;
 }
 
 export interface MockupImage {
@@ -32,6 +38,12 @@ const DEVICE_SCALE_FACTOR: Record<CaptureQuality, number> = {
   standard: 1,
   high: 2,
 };
+
+interface ResolvedCaptureOptions {
+  mode: CaptureMode;
+  quality: CaptureQuality;
+  httpCredentials?: HttpCredentials;
+}
 
 async function autoScroll(page: Page): Promise<void> {
   await page.evaluate(async () => {
@@ -113,12 +125,13 @@ async function captureOne(
   browser: Browser,
   url: string,
   viewport: ViewportConfig,
-  options: Required<CaptureOptions>,
+  options: ResolvedCaptureOptions,
 ): Promise<MockupImage[]> {
   const context = await browser.newContext({
     viewport: { width: viewport.width, height: viewport.height },
     deviceScaleFactor: DEVICE_SCALE_FACTOR[options.quality],
     reducedMotion: "reduce",
+    httpCredentials: options.httpCredentials,
   });
   const page = await context.newPage();
 
@@ -156,9 +169,10 @@ export async function captureMockups(
   const url = normalizeUrl(rawUrl);
   new URL(url); // throws if invalid
 
-  const resolvedOptions: Required<CaptureOptions> = {
+  const resolvedOptions: ResolvedCaptureOptions = {
     mode: options.mode ?? "full",
     quality: options.quality ?? "standard",
+    httpCredentials: options.httpCredentials,
   };
 
   const browser = await chromium.launch();
