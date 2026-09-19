@@ -18,6 +18,11 @@ const DEVICE_LABELS: Record<string, string> = {
 
 const DEVICE_ORDER = ["desktop", "tablet", "mobile"];
 
+function parseLabel(raw: string): { device: string; screenIndex?: number } {
+  const [device, index] = raw.split("-");
+  return { device, screenIndex: index ? Number(index) : undefined };
+}
+
 function downloadDataUrl(dataUrl: string, filename: string) {
   const link = document.createElement("a");
   link.href = dataUrl;
@@ -62,9 +67,14 @@ export default function Home() {
     }
   }
 
-  const orderedImages = DEVICE_ORDER.map((device) =>
-    images.find((image) => image.label === device),
-  ).filter((image): image is MockupResult => image !== undefined);
+  const byDevice = new Map<string, MockupResult[]>();
+  for (const image of images) {
+    const { device } = parseLabel(image.label);
+    const list = byDevice.get(device) ?? [];
+    list.push(image);
+    byDevice.set(device, list);
+  }
+  const devices = DEVICE_ORDER.filter((device) => byDevice.has(device));
 
   return (
     <div className="min-h-screen bg-zinc-50 px-6 py-16 dark:bg-black">
@@ -118,7 +128,7 @@ export default function Home() {
                   checked={mode === "sections"}
                   onChange={() => setMode("sections")}
                 />
-                Par sections
+                Par écrans
               </label>
             </fieldset>
 
@@ -160,7 +170,7 @@ export default function Home() {
           </p>
         )}
 
-        {orderedImages.length > 0 && (
+        {images.length > 0 && (
           <div className="flex flex-col gap-6">
             <div className="flex justify-end">
               <button
@@ -171,23 +181,43 @@ export default function Home() {
               </button>
             </div>
             <div className="grid gap-6 sm:grid-cols-3">
-              {orderedImages.map((image) => (
-                <div
-                  key={image.label}
-                  className="flex flex-col gap-2 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950"
-                >
+              {devices.map((device) => (
+                <div key={device} className="flex flex-col gap-4">
                   <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    {DEVICE_LABELS[image.label] ?? image.label}
+                    {DEVICE_LABELS[device] ?? device}
                   </span>
-                  <div className="max-h-80 overflow-y-auto rounded border border-zinc-100 dark:border-zinc-800">
-                    <img src={image.dataUrl} alt={`Mockup ${image.label}`} className="w-full" />
-                  </div>
-                  <button
-                    onClick={() => downloadDataUrl(image.dataUrl, `${image.label}.png`)}
-                    className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
-                  >
-                    Télécharger
-                  </button>
+                  {(byDevice.get(device) ?? []).map((image) => {
+                    const { screenIndex } = parseLabel(image.label);
+                    return (
+                      <div
+                        key={image.label}
+                        className="flex flex-col gap-2 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950"
+                      >
+                        {screenIndex && (
+                          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                            Écran {screenIndex}
+                          </span>
+                        )}
+                        <div
+                          className={`overflow-hidden rounded border border-zinc-100 dark:border-zinc-800 ${
+                            mode === "full" ? "max-h-80 overflow-y-auto" : ""
+                          }`}
+                        >
+                          <img
+                            src={image.dataUrl}
+                            alt={`Mockup ${image.label}`}
+                            className="w-full"
+                          />
+                        </div>
+                        <button
+                          onClick={() => downloadDataUrl(image.dataUrl, `${image.label}.png`)}
+                          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+                        >
+                          Télécharger
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               ))}
             </div>

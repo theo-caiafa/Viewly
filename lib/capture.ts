@@ -1,7 +1,5 @@
 import { chromium, type Browser, type Page } from "playwright";
 import { attemptDismissCookieBanners, hideConsentOverlays } from "./cookieBanners";
-import { tagZones, zoneSelector, labelZones, hideFloatingOverlays } from "./zones";
-import { composeSections } from "./composeSections";
 
 export type CaptureMode = "full" | "sections";
 export type CaptureQuality = "standard" | "high";
@@ -58,29 +56,35 @@ async function captureFull(page: Page): Promise<Buffer> {
   return page.screenshot({ fullPage: true, type: "png", animations: "disabled" });
 }
 
-async function captureSections(page: Page, deviceScaleFactor: number): Promise<Buffer> {
-  const zones = await page.evaluate(tagZones);
-  await page.evaluate(hideFloatingOverlays);
-  const labeled = labelZones(zones);
+/**
+ * Screen-by-screen pagination: one fixed-size image per viewport-height of
+ * content, exactly what the visitor would see without scrolling — not a DOM
+ * section boundary. The last frame is clamped to the bottom of the page so
+ * it stays full-height instead of trailing off into blank space.
+ */
+async function captureScreens(page: Page, viewportHeight: number): Promise<Buffer[]> {
+  const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+
+  const positions: number[] = [];
+  let y = 0;
+  while (y < scrollHeight) {
+    positions.push(y);
+    y += viewportHeight;
+  }
+  if (positions.length > 1) {
+    positions[positions.length - 1] = Math.max(scrollHeight - viewportHeight, 0);
+  }
+
   const buffers: Buffer[] = [];
-
-  for (const { zone } of labeled) {
-    try {
-      await hideConsentOverlays(page);
-      const buffer = await page
-        .locator(zoneSelector(zone.index))
-        .screenshot({ type: "png", animations: "disabled", timeout: 8_000 });
-      buffers.push(buffer);
-    } catch {
-      // element vanished or is unreachable (e.g. hidden by a script) — skip it
-    }
+  for (const position of positions) {
+    await page.evaluate((scrollY) => window.scrollTo(0, scrollY), position);
+    await page.waitForTimeout(150);
+    await hideConsentOverlays(page);
+    const buffer = await page.screenshot({ type: "png", animations: "disabled" });
+    buffers.push(buffer);
   }
 
-  if (buffers.length === 0) {
-    return captureFull(page);
-  }
-
-  return composeSections(buffers, deviceScaleFactor);
+  return buffers;
 }
 
 async function captureOne(
@@ -88,11 +92,10 @@ async function captureOne(
   url: string,
   viewport: ViewportConfig,
   options: Required<CaptureOptions>,
-): Promise<MockupImage> {
-  const deviceScaleFactor = DEVICE_SCALE_FACTOR[options.quality];
+): Promise<MockupImage[]> {
   const context = await browser.newContext({
     viewport: { width: viewport.width, height: viewport.height },
-    deviceScaleFactor,
+    deviceScaleFactor: DEVICE_SCALE_FACTOR[options.quality],
   });
   const page = await context.newPage();
 
@@ -101,12 +104,15 @@ async function captureOne(
     await attemptDismissCookieBanners(page);
     await autoScroll(page);
 
-    const buffer =
-      options.mode === "full"
-        ? await captureFull(page)
-        : await captureSections(page, deviceScaleFactor);
+    if (options.mode === "full") {
+      return [{ label: viewport.label, buffer: await captureFull(page) }];
+    }
 
-    return { label: viewport.label, buffer };
+    const screens = await captureScreens(page, viewport.height);
+    return screens.map((buffer, index) => ({
+      label: `${viewport.label}-${index + 1}`,
+      buffer,
+    }));
   } finally {
     await context.close();
   }
@@ -134,9 +140,10 @@ export async function captureMockups(
 
   const browser = await chromium.launch();
   try {
-    return await Promise.all(
+    const results = await Promise.all(
       VIEWPORTS.map((viewport) => captureOne(browser, url, viewport, resolvedOptions)),
     );
+    return results.flat();
   } finally {
     await browser.close();
   }
