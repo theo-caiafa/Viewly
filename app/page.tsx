@@ -26,7 +26,6 @@ interface JobPayload {
 type Mode = "full" | "sections";
 type Quality = "standard" | "high";
 type DeviceId = "desktop" | "tablet" | "mobile";
-type ResolutionPreset = "1440x900" | "1920x1080" | "custom";
 
 const DEVICE_LABELS: Record<string, string> = {
   desktop: "Desktop",
@@ -36,10 +35,34 @@ const DEVICE_LABELS: Record<string, string> = {
 
 const DEVICE_ORDER: DeviceId[] = ["desktop", "tablet", "mobile"];
 
-const RESOLUTION_PRESETS: Record<Exclude<ResolutionPreset, "custom">, { width: number; height: number }> = {
-  "1440x900": { width: 1440, height: 900 },
-  "1920x1080": { width: 1920, height: 1080 },
+interface ResolutionOption {
+  label: string;
+  width: number;
+  height: number;
+}
+
+// "custom" is always appended as the last option per device — not listed
+// here since it has no fixed width/height of its own.
+const RESOLUTION_PRESETS: Record<DeviceId, ResolutionOption[]> = {
+  desktop: [
+    { label: "1440×900", width: 1440, height: 900 },
+    { label: "1920×1080", width: 1920, height: 1080 },
+  ],
+  tablet: [
+    { label: "768×1024 (iPad portrait)", width: 768, height: 1024 },
+    { label: "1024×768 (iPad paysage)", width: 1024, height: 768 },
+    { label: "820×1180 (iPad Air)", width: 820, height: 1180 },
+  ],
+  mobile: [
+    { label: "375×812 (iPhone)", width: 375, height: 812 },
+    { label: "390×844 (iPhone 12/13/14)", width: 390, height: 844 },
+    { label: "360×800 (Android)", width: 360, height: 800 },
+  ],
 };
+
+function defaultPresetLabel(id: DeviceId): string {
+  return RESOLUTION_PRESETS[id][0].label;
+}
 
 const POLL_INTERVAL_MS = 1000;
 
@@ -72,9 +95,16 @@ export default function Home() {
   const [mode, setMode] = useState<Mode>("full");
   const [quality, setQuality] = useState<Quality>("standard");
   const [devices, setDevices] = useState<Set<DeviceId>>(new Set(DEVICE_ORDER));
-  const [resolution, setResolution] = useState<ResolutionPreset>("1440x900");
-  const [customWidth, setCustomWidth] = useState(1440);
-  const [customHeight, setCustomHeight] = useState(900);
+  const [resolutionChoice, setResolutionChoice] = useState<Record<DeviceId, string>>({
+    desktop: defaultPresetLabel("desktop"),
+    tablet: defaultPresetLabel("tablet"),
+    mobile: defaultPresetLabel("mobile"),
+  });
+  const [customSize, setCustomSize] = useState<Record<DeviceId, { width: number; height: number }>>({
+    desktop: { width: 1440, height: 900 },
+    tablet: { width: 768, height: 1024 },
+    mobile: { width: 375, height: 812 },
+  });
   const [showAuth, setShowAuth] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -171,7 +201,11 @@ export default function Home() {
     setPdfDataUrl(null);
     setJobId(null);
 
-    const resolvedResolution = resolution === "custom" ? { width: customWidth, height: customHeight } : RESOLUTION_PRESETS[resolution];
+    const resolutions: Record<string, { width: number; height: number }> = {};
+    for (const id of devices) {
+      const choice = resolutionChoice[id];
+      resolutions[id] = choice === "custom" ? customSize[id] : RESOLUTION_PRESETS[id].find((p) => p.label === choice) ?? RESOLUTION_PRESETS[id][0];
+    }
 
     try {
       const response = await fetch("/api/mockup", {
@@ -182,8 +216,7 @@ export default function Home() {
           mode,
           quality,
           devices: Array.from(devices),
-          desktopWidth: devices.has("desktop") ? resolvedResolution.width : undefined,
-          desktopHeight: devices.has("desktop") ? resolvedResolution.height : undefined,
+          resolutions,
           username: showAuth ? username : undefined,
           password: showAuth ? password : undefined,
         }),
@@ -307,54 +340,68 @@ export default function Home() {
             </fieldset>
           </div>
 
-          <fieldset className="flex flex-wrap items-center gap-3 text-sm">
-            <legend className="sr-only">Devices à générer</legend>
-            <span className="text-zinc-600 dark:text-zinc-400">Devices :</span>
+          <fieldset className="flex flex-col gap-3 text-sm">
+            <legend className="text-zinc-600 dark:text-zinc-400">Devices :</legend>
             {DEVICE_ORDER.map((id) => (
-              <label key={id} className="flex items-center gap-1.5">
-                <input
-                  type="checkbox"
-                  checked={devices.has(id)}
-                  onChange={() => toggleDevice(id)}
-                />
-                {DEVICE_LABELS[id]}
-              </label>
-            ))}
+              <div key={id} className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={devices.has(id)}
+                    onChange={() => toggleDevice(id)}
+                  />
+                  {DEVICE_LABELS[id]}
+                </label>
 
-            {devices.has("desktop") && (
-              <span className="flex items-center gap-2">
-                <select
-                  value={resolution}
-                  onChange={(e) => setResolution(e.target.value as ResolutionPreset)}
-                  className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                >
-                  <option value="1440x900">Desktop 1440×900</option>
-                  <option value="1920x1080">Desktop 1920×1080</option>
-                  <option value="custom">Personnalisé</option>
-                </select>
-                {resolution === "custom" && (
-                  <>
-                    <input
-                      type="number"
-                      min={320}
-                      max={3840}
-                      value={customWidth}
-                      onChange={(e) => setCustomWidth(Number(e.target.value))}
-                      className="w-20 rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    />
-                    ×
-                    <input
-                      type="number"
-                      min={240}
-                      max={3840}
-                      value={customHeight}
-                      onChange={(e) => setCustomHeight(Number(e.target.value))}
-                      className="w-20 rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    />
-                  </>
+                {devices.has(id) && (
+                  <span className="flex items-center gap-2">
+                    <select
+                      value={resolutionChoice[id]}
+                      onChange={(e) => setResolutionChoice((prev) => ({ ...prev, [id]: e.target.value }))}
+                      className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                    >
+                      {RESOLUTION_PRESETS[id].map((preset) => (
+                        <option key={preset.label} value={preset.label}>
+                          {preset.label}
+                        </option>
+                      ))}
+                      <option value="custom">Personnalisé</option>
+                    </select>
+                    {resolutionChoice[id] === "custom" && (
+                      <>
+                        <input
+                          type="number"
+                          min={200}
+                          max={3840}
+                          value={customSize[id].width}
+                          onChange={(e) =>
+                            setCustomSize((prev) => ({
+                              ...prev,
+                              [id]: { ...prev[id], width: Number(e.target.value) },
+                            }))
+                          }
+                          className="w-20 rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                        />
+                        ×
+                        <input
+                          type="number"
+                          min={200}
+                          max={3840}
+                          value={customSize[id].height}
+                          onChange={(e) =>
+                            setCustomSize((prev) => ({
+                              ...prev,
+                              [id]: { ...prev[id], height: Number(e.target.value) },
+                            }))
+                          }
+                          className="w-20 rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                        />
+                      </>
+                    )}
+                  </span>
                 )}
-              </span>
-            )}
+              </div>
+            ))}
           </fieldset>
 
           <div>

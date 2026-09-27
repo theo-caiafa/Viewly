@@ -25,8 +25,35 @@ interface RequestBody {
   username?: unknown;
   password?: unknown;
   devices?: unknown;
-  desktopWidth?: unknown;
-  desktopHeight?: unknown;
+  // Keyed by device id ("desktop" | "tablet" | "mobile"); a device without
+  // an entry here keeps its DEFAULT_DEVICES size.
+  resolutions?: unknown;
+}
+
+interface CustomResolution {
+  width: number;
+  height: number;
+}
+
+const MIN_DIMENSION = 200;
+const MAX_DIMENSION = 3840;
+
+function parseResolutions(input: unknown): Record<string, CustomResolution> | null {
+  if (input === undefined) return {};
+  if (typeof input !== "object" || input === null || Array.isArray(input)) return null;
+
+  const result: Record<string, CustomResolution> = {};
+  for (const [id, value] of Object.entries(input as Record<string, unknown>)) {
+    if (!VALID_DEVICE_IDS.includes(id)) return null;
+    if (typeof value !== "object" || value === null) return null;
+    const { width, height } = value as Record<string, unknown>;
+    if (typeof width !== "number" || typeof height !== "number") return null;
+    if (width < MIN_DIMENSION || width > MAX_DIMENSION || height < MIN_DIMENSION || height > MAX_DIMENSION) {
+      return null;
+    }
+    result[id] = { width: Math.round(width), height: Math.round(height) };
+  }
+  return result;
 }
 
 export async function POST(request: NextRequest) {
@@ -37,7 +64,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Corps de requête invalide." }, { status: 400 });
   }
 
-  const { url, mode, quality, username, password, devices, desktopWidth, desktopHeight } = body;
+  const { url, mode, quality, username, password, devices, resolutions } = body;
 
   if (typeof url !== "string" || url.trim().length === 0) {
     return NextResponse.json({ error: "Merci de fournir une URL." }, { status: 400 });
@@ -75,39 +102,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Sélectionne au moins un device." }, { status: 400 });
   }
 
-  const hasCustomDesktopResolution =
-    typeof desktopWidth === "number" && typeof desktopHeight === "number";
-  if (
-    hasCustomDesktopResolution &&
-    (desktopWidth < 320 || desktopWidth > 3840 || desktopHeight < 240 || desktopHeight > 3840)
-  ) {
-    return NextResponse.json({ error: "Résolution desktop invalide." }, { status: 400 });
+  const customResolutions = parseResolutions(resolutions);
+  if (customResolutions === null) {
+    return NextResponse.json({ error: "Résolution personnalisée invalide." }, { status: 400 });
   }
 
   const resolvedDevices: DeviceConfig[] = selectedDeviceIds.map((id) => {
-    const base = DEFAULT_DEVICES.find((d) => d.label === id)!;
-    if (id === "desktop" && hasCustomDesktopResolution) {
-      return {
-        label: "desktop",
-        width: Math.round(desktopWidth as number),
-        height: Math.round(desktopHeight as number),
-      };
+    const custom = customResolutions[id];
+    if (custom) {
+      return { label: id, width: custom.width, height: custom.height };
     }
-    return base;
+    return DEFAULT_DEVICES.find((d) => d.label === id)!;
   });
 
   const job = createJob();
+  const httpCredentials =
+    hasUsername && hasPassword
+      ? { username: username as string, password: password as string }
+      : undefined;
 
   void (async () => {
     try {
-      const images = await captureMockups(url, {
+      const { images } = await captureMockups(url, {
         mode: mode as CaptureMode | undefined,
         quality: quality as CaptureQuality | undefined,
         devices: resolvedDevices,
-        httpCredentials:
-          hasUsername && hasPassword
-            ? { username: username as string, password: password as string }
-            : undefined,
+        httpCredentials,
         onProgress: (event) => setProgress(job.id, event.device, event.current, event.total),
         onWarning: (message) => updateJob(job.id, { warning: message }),
         isCancelled: () => getJob(job.id)?.cancelRequested ?? false,

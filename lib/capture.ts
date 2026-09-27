@@ -44,6 +44,10 @@ export interface MockupImage {
   buffer: Buffer;
 }
 
+export interface CaptureResult {
+  images: MockupImage[];
+}
+
 export const DEFAULT_DEVICES: DeviceConfig[] = [
   { label: "desktop", width: 1440, height: 900 },
   { label: "tablet", width: 768, height: 1024 },
@@ -127,22 +131,119 @@ async function waitForVisualReadiness(page: Page): Promise<void> {
   });
 }
 
-async function autoScroll(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    await new Promise<void>((resolve) => {
-      let total = 0;
-      const step = 400;
-      const timer = setInterval(() => {
-        window.scrollBy(0, step);
-        total += step;
-        if (total >= document.body.scrollHeight) {
-          clearInterval(timer);
-          window.scrollTo(0, 0);
-          setTimeout(resolve, 200);
-        }
-      }, 100);
-    });
-  });
+const INTRO_CHECK_INTERVAL_MS = 300;
+const INTRO_MAX_WAIT_MS = 6000;
+const INTRO_STABLE_CHECKS_REQUIRED = 2;
+// Fraction of sampled bytes that must shift beyond COLOR_DELTA_THRESHOLD to
+// count the frame as "still changing" — small enough to catch a preloader
+// wipe or intro transition, large enough to ignore a blinking cursor.
+const CHANGED_BYTE_RATIO_THRESHOLD = 0.02;
+const COLOR_DELTA_THRESHOLD = 18;
+const SAMPLE_COUNT = 4096;
+
+/**
+ * Many portfolio/agency sites (the kind you'd find on Awwwards) run a splash
+ * screen, page-load transition, or staggered hero reveal that's still
+ * mid-flight when networkidle fires — Playwright's load signals only track
+ * network activity, not visual/CSS-driven sequences. Capturing right away
+ * freezes the mockup on an intro frame (a loader logo, a wipe half-done)
+ * instead of the page's actual resting state.
+ *
+ * This waits for the viewport to stop visibly changing between samples,
+ * polling instead of using a fixed delay so a fast site isn't slowed down
+ * and a slow intro gets the time it needs — capped so a page with a genuine
+ * looping animation (video background, particle canvas) doesn't stall the
+ * whole capture waiting for stillness that will never come.
+ */
+async function waitForIntroToSettle(page: Page): Promise<void> {
+  // Some preloaders (agency/portfolio sites especially) wait for the
+  // visitor's first gesture before finishing or even starting their exit
+  // animation — networkidle alone never triggers them. A small synthetic
+  // wheel nudge mimics that first gesture without scrolling the page
+  // anywhere a human wouldn't glance on load.
+  try {
+    await page.mouse.wheel(0, 40);
+    await page.waitForTimeout(150);
+    await page.mouse.wheel(0, -40);
+  } catch {
+    // best-effort — if this fails the settle loop below still runs
+  }
+
+  await waitForVisualStillness(page, INTRO_MAX_WAIT_MS);
+}
+
+/**
+ * Polls screenshots until two consecutive ones are near-identical (or a
+ * deadline is hit), instead of trusting a fixed delay. Used both right after
+ * page load (an intro/preloader might still be mid-sequence) and after each
+ * simulated wheel step on scroll-jacked sites (a GSAP-driven section
+ * transition is JS/rAF-based, not a Web Animations API animation, so
+ * settleAnimations()'s animation.finish() can't fast-forward it — waiting it
+ * out for real is the only option).
+ */
+async function waitForVisualStillness(page: Page, maxWaitMs: number): Promise<void> {
+  let previous: Buffer;
+  try {
+    previous = await page.screenshot({ type: "png", animations: "allow" });
+  } catch {
+    return;
+  }
+
+  let stableStreak = 0;
+  const deadline = Date.now() + maxWaitMs;
+
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(INTRO_CHECK_INTERVAL_MS);
+
+    let current: Buffer;
+    try {
+      current = await page.screenshot({ type: "png", animations: "allow" });
+    } catch {
+      return;
+    }
+
+    if (pngBuffersDiffer(previous, current)) {
+      stableStreak = 0;
+    } else {
+      stableStreak++;
+      if (stableStreak >= INTRO_STABLE_CHECKS_REQUIRED) return;
+    }
+    previous = current;
+  }
+}
+
+/**
+ * PNG is compressed, so byte offsets don't map to pixel positions — an exact
+ * pixel-grid compare would need a decoder. As a fast proxy: identical bytes
+ * means nothing moved, and once they differ, sampling raw encoded bytes at a
+ * fixed stride still reliably separates a few pixels of drift from a real
+ * visible change across the frame.
+ *
+ * changedRatioThreshold is exposed rather than fixed: settling-detection
+ * wants the strict default (any real motion counts as "still changing"),
+ * while "is this frame basically a repeat of one I've already captured"
+ * (the wheel-scroll fallback) needs a much looser bar — a looping marquee or
+ * ticking counter keeps a sliver of the frame in constant motion, and at the
+ * strict threshold two frames of the same resting section never count as
+ * equal.
+ */
+function pngBuffersDiffer(before: Buffer, after: Buffer, changedRatioThreshold = CHANGED_BYTE_RATIO_THRESHOLD): boolean {
+  if (before.length === after.length && before.equals(after)) return false;
+
+  const lengthDeltaRatio = Math.abs(before.length - after.length) / Math.max(before.length, after.length, 1);
+  if (lengthDeltaRatio > 0.01) return true;
+
+  const shorter = Math.min(before.length, after.length);
+  const step = Math.max(1, Math.floor(shorter / SAMPLE_COUNT));
+  let differing = 0;
+  let checked = 0;
+  for (let i = 0; i < shorter; i += step) {
+    checked++;
+    if (Math.abs(before[i] - after[i]) > COLOR_DELTA_THRESHOLD) differing++;
+  }
+  if (checked === 0) return false;
+
+  return differing / checked > changedRatioThreshold;
 }
 
 /**
@@ -171,9 +272,40 @@ async function prepareForScreenshot(page: Page): Promise<void> {
   await hideKnownOverlays(page);
 }
 
-async function captureFull(page: Page): Promise<Buffer> {
+/**
+ * Some sites (heavy GSAP ScrollTrigger setups especially) intercept wheel
+ * input and animate content via transforms without ever moving the native
+ * scroll position — window.scrollTo becomes a no-op and
+ * document.documentElement.scrollHeight stays pinned at one viewport's
+ * height. Detected by asking for a scroll and checking whether scrollY
+ * actually changed; when it didn't, callers should fall back to simulated
+ * wheel input instead of scrollTo/scrollHeight, since those never move here.
+ */
+async function nativeScrollWorks(page: Page): Promise<boolean> {
+  const before = await page.evaluate(() => window.scrollY);
+  await page.evaluate(() => window.scrollTo(0, 200));
+  await page.waitForTimeout(150);
+  const after = await page.evaluate(() => window.scrollY);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  return after !== before;
+}
+
+async function captureFull(page: Page, device: string, onWarning: (message: string) => void): Promise<Buffer> {
   await prepareForScreenshot(page);
-  return page.screenshot({ fullPage: true, type: "png", animations: "disabled" });
+
+  if (await nativeScrollWorks(page)) {
+    return page.screenshot({ fullPage: true, type: "png", animations: "disabled" });
+  }
+
+  // fullPage capture relies on the browser's own scrollHeight bookkeeping,
+  // which is exactly what's broken here — there's no reliable way to stitch
+  // a full-page image from wheel-simulated, JS-driven scroll. Falling back
+  // to a single viewport-sized shot of the resting hero beats silently
+  // returning a truncated "full page" image.
+  onWarning(
+    `${device} : ce site pilote son scroll en JavaScript — seule la première section a pu être capturée en vue complète.`,
+  );
+  return page.screenshot({ type: "png", animations: "disabled" });
 }
 
 /**
@@ -190,6 +322,13 @@ async function captureScreens(
   onWarning: (message: string) => void,
   isCancelled: () => boolean,
 ): Promise<Buffer[]> {
+  if (!(await nativeScrollWorks(page))) {
+    onWarning(
+      `${device} : ce site pilote son scroll en JavaScript, la pagination par écrans peut être incomplète.`,
+    );
+    return captureScreensByWheel(page, device, onProgress, isCancelled);
+  }
+
   const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
 
   const positions: number[] = [];
@@ -224,6 +363,58 @@ async function captureScreens(
   return buffers;
 }
 
+const WHEEL_STEP_PX = 700;
+const WHEEL_SETTLE_MAX_WAIT_MS = 2500;
+const MAX_WHEEL_SCREENS = 15;
+// Loose on purpose — this asks "is this basically the same section", not
+// "did anything move at all", so a marquee/ticker occupying a small corner
+// of the frame shouldn't stop two otherwise-identical screens from matching.
+const REPEATED_FRAME_THRESHOLD = 0.15;
+
+/**
+ * Fallback for sites where native scroll is a no-op (see nativeScrollWorks):
+ * repeatedly simulate a wheel gesture and screenshot after each, stopping
+ * once a new frame looks like one already captured — the only available
+ * "did we reach the bottom" signal when scrollHeight can't be trusted.
+ *
+ * Compares against every frame captured so far, not just the last one: a
+ * looping marquee or ticking counter keeps SOME part of the frame changing
+ * forever, so "differs from the previous frame" alone never fires and the
+ * whole budget gets spent re-capturing the same resting section. Once the
+ * bulk of the frame (not just a sliver) repeats something already seen,
+ * that's the actual end of new content.
+ */
+async function captureScreensByWheel(
+  page: Page,
+  device: string,
+  onProgress: (event: ProgressEvent) => void,
+  isCancelled: () => boolean,
+): Promise<Buffer[]> {
+  const buffers: Buffer[] = [];
+
+  await prepareForScreenshot(page);
+  buffers.push(await page.screenshot({ type: "png", animations: "disabled" }));
+  onProgress({ device, current: 1, total: 0 });
+
+  for (let i = 1; i < MAX_WHEEL_SCREENS; i++) {
+    checkCancelled(isCancelled);
+
+    await page.mouse.wheel(0, WHEEL_STEP_PX);
+    await waitForVisualStillness(page, WHEEL_SETTLE_MAX_WAIT_MS);
+    await prepareForScreenshot(page);
+    const current = await page.screenshot({ type: "png", animations: "disabled" });
+
+    const repeatsEarlierFrame = buffers.some((seen) => !pngBuffersDiffer(seen, current, REPEATED_FRAME_THRESHOLD));
+    if (repeatsEarlierFrame) break;
+
+    buffers.push(current);
+    onProgress({ device, current: buffers.length, total: 0 });
+  }
+
+  onProgress({ device, current: buffers.length, total: buffers.length });
+  return buffers;
+}
+
 async function captureOne(
   url: string,
   device: DeviceConfig,
@@ -236,7 +427,6 @@ async function captureOne(
   const context = await browser.newContext({
     viewport: { width: device.width, height: device.height },
     deviceScaleFactor: DEVICE_SCALE_FACTOR[options.quality],
-    reducedMotion: "reduce",
     userAgent: USER_AGENT,
     httpCredentials: options.httpCredentials,
   });
@@ -263,11 +453,16 @@ async function captureOne(
 
     await detectBlockChallenge(page);
     await attemptDismissCookieBanners(page);
+    // Before scrolling or measuring page height: a splash/preloader can
+    // still be resizing or replacing the DOM, which would throw off both.
+    await waitForIntroToSettle(page);
+    checkCancelled(options.isCancelled);
+
     await autoScroll(page);
     checkCancelled(options.isCancelled);
 
     if (options.mode === "full") {
-      return [{ label: device.label, buffer: await captureFull(page) }];
+      return [{ label: device.label, buffer: await captureFull(page, device.label, options.onWarning) }];
     }
 
     const screens = await captureScreens(
@@ -291,6 +486,24 @@ async function captureOne(
   }
 }
 
+async function autoScroll(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve) => {
+      let total = 0;
+      const step = 400;
+      const timer = setInterval(() => {
+        window.scrollBy(0, step);
+        total += step;
+        if (total >= document.body.scrollHeight) {
+          clearInterval(timer);
+          window.scrollTo(0, 0);
+          setTimeout(resolve, 200);
+        }
+      }, 100);
+    });
+  });
+}
+
 export function normalizeUrl(input: string): string {
   const trimmed = input.trim();
   if (!/^https?:\/\//i.test(trimmed)) {
@@ -302,7 +515,7 @@ export function normalizeUrl(input: string): string {
 export async function captureMockups(
   rawUrl: string,
   options: CaptureOptions = {},
-): Promise<MockupImage[]> {
+): Promise<CaptureResult> {
   const url = normalizeUrl(rawUrl);
   new URL(url); // throws if invalid
 
@@ -319,5 +532,6 @@ export async function captureMockups(
   const results = await Promise.all(
     resolvedOptions.devices.map((device) => captureOne(url, device, resolvedOptions)),
   );
-  return results.flat();
+
+  return { images: results.flat() };
 }
