@@ -6,11 +6,10 @@ import {
   type CaptureMode,
   type CaptureQuality,
   type DeviceConfig,
+  type ScreenReplay,
 } from "@/lib/capture";
-import { buildZip } from "@/lib/zip";
-import { buildPdf } from "@/lib/pdf";
-import { siteSlug } from "@/lib/siteSlug";
 import { createJob, updateJob, setProgress, getJob } from "@/lib/jobs";
+import { siteSlug } from "@/lib/siteSlug";
 
 export const runtime = "nodejs";
 
@@ -121,11 +120,13 @@ export async function POST(request: NextRequest) {
       ? { username: username as string, password: password as string }
       : undefined;
 
+  const resolvedQuality: CaptureQuality = (quality as CaptureQuality | undefined) ?? "standard";
+
   void (async () => {
     try {
       const { images } = await captureMockups(url, {
         mode: mode as CaptureMode | undefined,
-        quality: quality as CaptureQuality | undefined,
+        quality: resolvedQuality,
         devices: resolvedDevices,
         httpCredentials,
         onProgress: (event) => setProgress(job.id, event.device, event.current, event.total),
@@ -133,17 +134,31 @@ export async function POST(request: NextRequest) {
         isCancelled: () => getJob(job.id)?.cancelRequested ?? false,
       });
 
-      const slug = siteSlug(url);
-      const [zip, pdf] = await Promise.all([buildZip(images, slug), buildPdf(images)]);
+      const replaysByLabel: Record<string, ScreenReplay> = {};
+      for (const image of images) {
+        if (image.replay) replaysByLabel[image.label] = image.replay;
+      }
 
       updateJob(job.id, {
         status: "done",
-        images: images.map((image) => ({
-          label: image.label,
-          dataUrl: `data:image/png;base64,${image.buffer.toString("base64")}`,
-        })),
-        zipDataUrl: `data:application/zip;base64,${zip.toString("base64")}`,
-        pdfDataUrl: `data:application/pdf;base64,${pdf.toString("base64")}`,
+        images: images.map((image) => {
+          const deviceId = image.label.split("-")[0];
+          const device = resolvedDevices.find((d) => d.label === deviceId);
+          return {
+            label: image.label,
+            dataUrl: `data:image/png;base64,${image.buffer.toString("base64")}`,
+            width: device?.width ?? 0,
+            height: device?.height ?? 0,
+          };
+        }),
+        sourceContext: {
+          url,
+          httpCredentials,
+          devices: resolvedDevices,
+          quality: resolvedQuality,
+          slug: siteSlug(url),
+          replaysByLabel,
+        },
       });
     } catch (error) {
       if (error instanceof CaptureCancelledError) {

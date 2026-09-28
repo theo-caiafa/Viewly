@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 interface MockupResult {
   label: string;
   dataUrl: string;
+  width: number;
+  height: number;
 }
 
 interface JobProgressEntry {
@@ -19,9 +21,14 @@ interface JobPayload {
   warning?: string;
   error?: string;
   images?: MockupResult[];
-  zipDataUrl?: string;
-  pdfDataUrl?: string;
 }
+
+type ExportFormat = "png" | "webp" | "pdf";
+const EXPORT_FORMATS: { value: ExportFormat; label: string }[] = [
+  { value: "png", label: "PNG" },
+  { value: "webp", label: "WebP" },
+  { value: "pdf", label: "PDF" },
+];
 
 type Mode = "full" | "sections";
 type Quality = "standard" | "high";
@@ -62,6 +69,27 @@ const RESOLUTION_PRESETS: Record<DeviceId, ResolutionOption[]> = {
 
 function defaultPresetLabel(id: DeviceId): string {
   return RESOLUTION_PRESETS[id][0].label;
+}
+
+const DURATION_PRESETS_MS = [3000, 5000, 8000, 15000];
+const SCALE_OPTIONS = [1, 0.5] as const;
+const DEFAULT_DURATION_MS = 5000;
+const DEFAULT_SCALE = 1;
+const MIN_CUSTOM_DURATION_S = 1;
+const MAX_CUSTOM_DURATION_S = 30;
+
+function formatDuration(ms: number): string {
+  return `${(ms / 1000).toFixed(ms % 1000 === 0 ? 0 : 1)}s`;
+}
+
+function scaledResolution(width: number, height: number, scale: number): string {
+  return `${Math.round(width * scale)}×${Math.round(height * scale)}`;
+}
+
+interface HoverableElement {
+  id: string;
+  label: string;
+  point: { x: number; y: number };
 }
 
 const POLL_INTERVAL_MS = 1000;
@@ -115,9 +143,23 @@ export default function Home() {
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [images, setImages] = useState<MockupResult[]>([]);
-  const [zipDataUrl, setZipDataUrl] = useState<string | null>(null);
-  const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
+  const [exportingLabel, setExportingLabel] = useState<string | null>(null);
+  const [exportingZip, setExportingZip] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const [videoPanelOpenFor, setVideoPanelOpenFor] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState<Record<string, number>>({});
+  const [videoCustomDurationS, setVideoCustomDurationS] = useState<Record<string, number>>({});
+  const [videoScale, setVideoScale] = useState<Record<string, number>>({});
+  const [videoCapturingFor, setVideoCapturingFor] = useState<string | null>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [videoResults, setVideoResults] = useState<Record<string, string>>({});
+  const [scrollToNext, setScrollToNext] = useState<Record<string, boolean>>({});
+  const [hoverElements, setHoverElements] = useState<Record<string, HoverableElement[]>>({});
+  const [hoverElementId, setHoverElementId] = useState<Record<string, string>>({});
+  const [hoverLoadingFor, setHoverLoadingFor] = useState<string | null>(null);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -164,8 +206,6 @@ export default function Home() {
 
       if (data.status === "done") {
         setImages(data.images ?? []);
-        setZipDataUrl(data.zipDataUrl ?? null);
-        setPdfDataUrl(data.pdfDataUrl ?? null);
         setStatus("done");
         stopPolling();
       } else if (data.status === "error") {
@@ -197,9 +237,14 @@ export default function Home() {
     setWarning(null);
     setProgress([]);
     setImages([]);
-    setZipDataUrl(null);
-    setPdfDataUrl(null);
     setJobId(null);
+    setVideoPanelOpenFor(null);
+    setVideoResults({});
+    setVideoError(null);
+    setScrollToNext({});
+    setHoverElements({});
+    setHoverElementId({});
+    setExportError(null);
 
     const resolutions: Record<string, { width: number; height: number }> = {};
     for (const id of devices) {
@@ -241,6 +286,124 @@ export default function Home() {
       await fetch(`/api/mockup/${jobId}`, { method: "DELETE" });
     } catch {
       // best-effort — the poll loop will surface any resulting state anyway
+    }
+  }
+
+  function toggleVideoPanel(label: string) {
+    setVideoPanelOpenFor((prev) => (prev === label ? null : label));
+    setVideoError(null);
+  }
+
+  async function captureVideo(label: string) {
+    if (!jobId) return;
+    const durationMs = videoDuration[label] ?? DEFAULT_DURATION_MS;
+    const scale = videoScale[label] ?? DEFAULT_SCALE;
+    const selectedHoverId = hoverElementId[label];
+    const hoverPoint = selectedHoverId
+      ? hoverElements[label]?.find((el) => el.id === selectedHoverId)?.point
+      : undefined;
+
+    setVideoCapturingFor(label);
+    setVideoError(null);
+
+    try {
+      const response = await fetch(`/api/mockup/${jobId}/video`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label,
+          durationMs,
+          scale,
+          hoverPoint,
+          scrollToNextScreen: scrollToNext[label] ?? false,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Erreur inconnue.");
+      }
+
+      setVideoResults((prev) => ({ ...prev, [label]: data.dataUrl }));
+    } catch (err) {
+      setVideoError(err instanceof Error ? err.message : "Erreur inconnue.");
+    } finally {
+      setVideoCapturingFor(null);
+    }
+  }
+
+  async function loadHoverableElements(label: string) {
+    if (!jobId || hoverElements[label]) return;
+    setHoverLoadingFor(label);
+    setVideoError(null);
+
+    try {
+      const response = await fetch(`/api/mockup/${jobId}/hoverable`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Erreur inconnue.");
+      }
+
+      setHoverElements((prev) => ({ ...prev, [label]: data.elements }));
+    } catch (err) {
+      setVideoError(err instanceof Error ? err.message : "Erreur inconnue.");
+    } finally {
+      setHoverLoadingFor(null);
+    }
+  }
+
+  async function exportSingle(label: string) {
+    if (!jobId) return;
+    setExportingLabel(label);
+    setExportError(null);
+
+    try {
+      const response = await fetch(`/api/mockup/${jobId}/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: exportFormat, label }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Erreur inconnue.");
+      }
+
+      downloadDataUrl(data.dataUrl, data.filename);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Erreur inconnue.");
+    } finally {
+      setExportingLabel(null);
+    }
+  }
+
+  async function exportZip() {
+    if (!jobId) return;
+    setExportingZip(true);
+    setExportError(null);
+
+    try {
+      const response = await fetch(`/api/mockup/${jobId}/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: exportFormat }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Erreur inconnue.");
+      }
+
+      downloadDataUrl(data.dataUrl, data.filename);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Erreur inconnue.");
+    } finally {
+      setExportingZip(false);
     }
   }
 
@@ -471,28 +634,44 @@ export default function Home() {
 
         {images.length > 0 && (
           <div className="flex flex-col gap-6">
-            <div className="flex justify-end gap-3">
+            <div className="flex items-center justify-end gap-3">
+              {exportError && (
+                <p className="text-xs text-red-600 dark:text-red-400">{exportError}</p>
+              )}
+              <label className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400">
+                Format :
+                <select
+                  value={exportFormat}
+                  onChange={(e) => setExportFormat(e.target.value as ExportFormat)}
+                  className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                >
+                  {EXPORT_FORMATS.map((f) => (
+                    <option key={f.value} value={f.value}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
-                onClick={() => pdfDataUrl && downloadDataUrl(pdfDataUrl, "mockups.pdf")}
-                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+                type="button"
+                disabled={exportingZip}
+                onClick={exportZip}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
               >
-                Télécharger en PDF
-              </button>
-              <button
-                onClick={() => zipDataUrl && downloadDataUrl(zipDataUrl, "mockups.zip")}
-                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
-              >
-                Tout télécharger (.zip)
+                {exportingZip ? "Préparation..." : "Tout télécharger (.zip)"}
               </button>
             </div>
             <div className="grid gap-6 sm:grid-cols-3">
-              {orderedDeviceGroups.map((device) => (
+              {orderedDeviceGroups.map((device) => {
+                const deviceImages = byDevice.get(device) ?? [];
+                return (
                 <div key={device} className="flex flex-col gap-4">
                   <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                     {DEVICE_LABELS[device] ?? device}
                   </span>
-                  {(byDevice.get(device) ?? []).map((image) => {
+                  {deviceImages.map((image, imageIndex) => {
                     const { screenIndex } = parseLabel(image.label);
+                    const hasNextScreen = imageIndex < deviceImages.length - 1;
                     return (
                       <div
                         key={image.label}
@@ -517,16 +696,174 @@ export default function Home() {
                           />
                         </button>
                         <button
-                          onClick={() => downloadDataUrl(image.dataUrl, `${image.label}.png`)}
-                          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+                          type="button"
+                          disabled={exportingLabel === image.label}
+                          onClick={() => exportSingle(image.label)}
+                          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-black hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
                         >
-                          Télécharger
+                          {exportingLabel === image.label ? "Préparation..." : "Télécharger"}
                         </button>
+
+                        {mode === "sections" && (
+                          <div className="flex flex-col gap-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+                            <button
+                              type="button"
+                              onClick={() => toggleVideoPanel(image.label)}
+                              className="text-left text-xs text-zinc-500 underline underline-offset-2 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                            >
+                              {videoPanelOpenFor === image.label ? "Annuler" : "Capturer cet écran en vidéo"}
+                            </button>
+
+                            {videoPanelOpenFor === image.label && (
+                              <div className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900">
+                                {videoResults[image.label] ? (
+                                  <div className="flex flex-col gap-2">
+                                    <video
+                                      src={videoResults[image.label]}
+                                      controls
+                                      loop
+                                      className="w-full rounded"
+                                    />
+                                    <button
+                                      onClick={() =>
+                                        downloadDataUrl(videoResults[image.label], `${image.label}.webm`)
+                                      }
+                                      className="rounded border border-zinc-300 px-3 py-1.5 font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                                    >
+                                      Télécharger la vidéo
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="flex flex-col gap-1.5">
+                                      <span className="font-medium text-zinc-600 dark:text-zinc-400">Durée</span>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {DURATION_PRESETS_MS.map((ms) => (
+                                          <button
+                                            key={ms}
+                                            type="button"
+                                            onClick={() =>
+                                              setVideoDuration((prev) => ({ ...prev, [image.label]: ms }))
+                                            }
+                                            className={`rounded border px-2 py-1 ${
+                                              (videoDuration[image.label] ?? DEFAULT_DURATION_MS) === ms
+                                                ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
+                                                : "border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                                            }`}
+                                          >
+                                            {formatDuration(ms)}
+                                          </button>
+                                        ))}
+                                        <input
+                                          type="number"
+                                          min={MIN_CUSTOM_DURATION_S}
+                                          max={MAX_CUSTOM_DURATION_S}
+                                          placeholder="Perso (s)"
+                                          value={videoCustomDurationS[image.label] ?? ""}
+                                          onChange={(e) => {
+                                            const seconds = Number(e.target.value);
+                                            setVideoCustomDurationS((prev) => ({ ...prev, [image.label]: seconds }));
+                                            if (seconds > 0) {
+                                              setVideoDuration((prev) => ({ ...prev, [image.label]: seconds * 1000 }));
+                                            }
+                                          }}
+                                          className="w-20 rounded border border-zinc-300 bg-white px-2 py-1 dark:border-zinc-700 dark:bg-zinc-950"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1.5">
+                                      <span className="font-medium text-zinc-600 dark:text-zinc-400">Qualité</span>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {SCALE_OPTIONS.map((s) => {
+                                          return (
+                                            <button
+                                              key={s}
+                                              type="button"
+                                              onClick={() => setVideoScale((prev) => ({ ...prev, [image.label]: s }))}
+                                              className={`rounded border px-2 py-1 ${
+                                                (videoScale[image.label] ?? DEFAULT_SCALE) === s
+                                                  ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
+                                                  : "border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                                              }`}
+                                            >
+                                              {scaledResolution(image.width, image.height, s)}
+                                              {s === 1 ? " (native)" : ""}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1.5">
+                                      <span className="font-medium text-zinc-600 dark:text-zinc-400">Mouvement</span>
+                                      <label
+                                        className={`flex items-center gap-1.5 ${!hasNextScreen ? "opacity-50" : ""}`}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          disabled={!hasNextScreen}
+                                          checked={scrollToNext[image.label] ?? false}
+                                          onChange={(e) =>
+                                            setScrollToNext((prev) => ({ ...prev, [image.label]: e.target.checked }))
+                                          }
+                                        />
+                                        Filmer le scroll vers l&apos;écran suivant
+                                      </label>
+
+                                      {hoverElements[image.label] ? (
+                                        <select
+                                          value={hoverElementId[image.label] ?? ""}
+                                          onChange={(e) =>
+                                            setHoverElementId((prev) => ({ ...prev, [image.label]: e.target.value }))
+                                          }
+                                          className="rounded border border-zinc-300 bg-white px-2 py-1 dark:border-zinc-700 dark:bg-zinc-950"
+                                        >
+                                          <option value="">Aucun survol simulé</option>
+                                          {hoverElements[image.label].map((el) => (
+                                            <option key={el.id} value={el.id}>
+                                              Survoler : {el.label}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          disabled={hoverLoadingFor === image.label}
+                                          onClick={() => loadHoverableElements(image.label)}
+                                          className="text-left underline underline-offset-2 hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-200"
+                                        >
+                                          {hoverLoadingFor === image.label
+                                            ? "Recherche des éléments..."
+                                            : "Simuler un survol (hover)"}
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    {videoError && (
+                                      <p className="text-red-600 dark:text-red-400">{videoError}</p>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      disabled={videoCapturingFor === image.label}
+                                      onClick={() => captureVideo(image.label)}
+                                      className="rounded bg-black px-3 py-1.5 font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                    >
+                                      {videoCapturingFor === image.label ? "Capture en cours..." : "Lancer la capture"}
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

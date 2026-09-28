@@ -9,7 +9,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   if (!job) {
     return NextResponse.json({ error: "Génération introuvable ou expirée." }, { status: 404 });
   }
-  return NextResponse.json(job);
+
+  // sourceContext carries httpCredentials and internal replay recipes —
+  // server-only, never sent to the client.
+  const { sourceContext: _sourceContext, ...publicJob } = job;
+  return NextResponse.json(publicJob);
 }
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-28
+
+- Ajout de la capture vidéo (WebM) par écran en mode « par écrans » : durée et échelle réglables, simulation de survol (hover) sur les éléments interactifs détectés, et option pour filmer le scroll vers l'écran suivant plutôt que rester figé. Qualité alignée sur le choix standard/haute résolution des mockups (le deviceScaleFactor n'était pas propagé à la vidéo). Ré-encodage VP9 après capture pour corriger le bitrate bas imposé par défaut par Playwright.
+- Refonte de l'export : un menu déroulant PNG / WebP / PDF pilote à la fois le téléchargement individuel et le zip groupé — chaque mockup devient son propre fichier dans le format choisi (le PDF combiné multi-pages a été retiré au profit d'un PDF par écran).
+- Corrections suite à revue de code : messages d'erreur clarifiés quand la vidéo/le survol sont demandés sur un job en mode « vue complète », nettoyage périodique des jobs expirés (au lieu de dépendre du prochain job créé), et re-détection du scroll natif au moment du replay vidéo (au lieu de faire confiance à l'état observé pendant la capture initiale) pour les sites dont le scroll-jacking dépend d'une interaction préalable.
+
 ## 2026-09-27
 
 - Fiabilisé la capture sur les sites à intro/preloader et à scroll-jacking (agences créatives type Awwwards, GSAP ScrollTrigger) : attente réelle de la stabilisation visuelle avant chaque screenshot au lieu d'un délai fixe, détection du scroll natif inopérant avec bascule automatique sur des wheel events simulés, et détection de fin de contenu robuste face aux animations en boucle (marquee, ticker).

@@ -39,9 +39,19 @@ export interface CaptureOptions {
   isCancelled?: () => boolean;
 }
 
+// How to put the page back into the exact state a given screen was
+// captured from, for a later video capture of that same screen. Two kinds
+// because captureScreens picks its strategy per device (see
+// nativeScrollWorks): a page with working native scroll can jump straight
+// to a Y position, but a scroll-jacked page (GSAP ScrollTrigger and
+// similar) has no reliable scrollY at all — the only way back is to replay
+// the same number of simulated wheel gestures used to get there originally.
+export type ScreenReplay = { kind: "scroll"; scrollY: number } | { kind: "wheel"; steps: number };
+
 export interface MockupImage {
   label: string;
   buffer: Buffer;
+  replay?: ScreenReplay;
 }
 
 export interface CaptureResult {
@@ -64,7 +74,7 @@ const USER_AGENT =
 const BLOCK_TITLE_PATTERNS =
   /just a moment|attention required|checking your browser|access denied|are you a robot|verify you are human|captcha/i;
 
-const DEVICE_SCALE_FACTOR: Record<CaptureQuality, number> = {
+export const DEVICE_SCALE_FACTOR: Record<CaptureQuality, number> = {
   standard: 1,
   high: 2,
 };
@@ -321,7 +331,7 @@ async function captureScreens(
   onProgress: (event: ProgressEvent) => void,
   onWarning: (message: string) => void,
   isCancelled: () => boolean,
-): Promise<Buffer[]> {
+): Promise<Array<{ buffer: Buffer; replay: ScreenReplay }>> {
   if (!(await nativeScrollWorks(page))) {
     onWarning(
       `${device} : ce site pilote son scroll en JavaScript, la pagination par écrans peut être incomplète.`,
@@ -347,7 +357,7 @@ async function captureScreens(
     );
   }
 
-  const buffers: Buffer[] = [];
+  const results: Array<{ buffer: Buffer; replay: ScreenReplay }> = [];
   for (let i = 0; i < positions.length; i++) {
     checkCancelled(isCancelled);
     onProgress({ device, current: i, total: positions.length });
@@ -356,11 +366,11 @@ async function captureScreens(
     await page.waitForTimeout(300);
     await prepareForScreenshot(page);
     const buffer = await page.screenshot({ type: "png", animations: "disabled" });
-    buffers.push(buffer);
+    results.push({ buffer, replay: { kind: "scroll", scrollY: positions[i] } });
   }
 
   onProgress({ device, current: positions.length, total: positions.length });
-  return buffers;
+  return results;
 }
 
 const WHEEL_STEP_PX = 700;
@@ -389,11 +399,12 @@ async function captureScreensByWheel(
   device: string,
   onProgress: (event: ProgressEvent) => void,
   isCancelled: () => boolean,
-): Promise<Buffer[]> {
-  const buffers: Buffer[] = [];
+): Promise<Array<{ buffer: Buffer; replay: ScreenReplay }>> {
+  const results: Array<{ buffer: Buffer; replay: ScreenReplay }> = [];
 
   await prepareForScreenshot(page);
-  buffers.push(await page.screenshot({ type: "png", animations: "disabled" }));
+  const first = await page.screenshot({ type: "png", animations: "disabled" });
+  results.push({ buffer: first, replay: { kind: "wheel", steps: 0 } });
   onProgress({ device, current: 1, total: 0 });
 
   for (let i = 1; i < MAX_WHEEL_SCREENS; i++) {
@@ -404,15 +415,15 @@ async function captureScreensByWheel(
     await prepareForScreenshot(page);
     const current = await page.screenshot({ type: "png", animations: "disabled" });
 
-    const repeatsEarlierFrame = buffers.some((seen) => !pngBuffersDiffer(seen, current, REPEATED_FRAME_THRESHOLD));
+    const repeatsEarlierFrame = results.some((seen) => !pngBuffersDiffer(seen.buffer, current, REPEATED_FRAME_THRESHOLD));
     if (repeatsEarlierFrame) break;
 
-    buffers.push(current);
-    onProgress({ device, current: buffers.length, total: 0 });
+    results.push({ buffer: current, replay: { kind: "wheel", steps: i } });
+    onProgress({ device, current: results.length, total: 0 });
   }
 
-  onProgress({ device, current: buffers.length, total: buffers.length });
-  return buffers;
+  onProgress({ device, current: results.length, total: results.length });
+  return results;
 }
 
 async function captureOne(
@@ -473,9 +484,10 @@ async function captureOne(
       options.onWarning,
       options.isCancelled,
     );
-    return screens.map((buffer, index) => ({
+    return screens.map(({ buffer, replay }, index) => ({
       label: `${device.label}-${index + 1}`,
       buffer,
+      replay,
     }));
   } catch (error) {
     if (cancelledMidFlight) throw new CaptureCancelledError();
