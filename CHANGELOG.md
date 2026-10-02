@@ -2,6 +2,8 @@
 
 ## 2026-10-02
 
+- Mise en œuvre de la décision "propre" du jour : réorganisation de `lib/` par domaine (`lib/capture/` pour capture.ts, browserManager.ts, cookieBanners.ts, videoCapture.ts ; `lib/export/` pour imageFormat.ts, pdf.ts, zip.ts — jobs.ts et siteSlug.ts restent à la racine), CI GitHub Actions (lint + build + test à chaque push/PR sur `main`), et premier test unitaire (`siteSlug.test.ts`) pour poser le pattern.
+- Corrigé au passage une vulnérabilité RCE critique dans Next.js (`next/og`, GHSA-vcvr-r3jv-pc5j, 16.2.0–16.3.5), découverte via `npm audit` en ajoutant Vitest — mise à jour vers 16.3.8.
 - Décision : le projet, jusqu'ici purement perso, est désormais synchronisé avec un devoir de cours UX design — l'intention de travail passe de « rapide » à « propre ». Conséquences actées : tests unitaires au fil de l'eau sur `lib/` + tests end-to-end après chaque gros morceau, lint/tests automatiques via GitHub Actions à chaque push, et réorganisation à venir de `lib/` par domaine (`lib/capture/`, `lib/export/`).
 
 ## 2026-09-28
