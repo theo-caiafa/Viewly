@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-02
+
+- Décision : le projet, jusqu'ici purement perso, est désormais synchronisé avec un devoir de cours UX design — l'intention de travail passe de « rapide » à « propre ». Conséquences actées : tests unitaires au fil de l'eau sur `lib/` + tests end-to-end après chaque gros morceau, lint/tests automatiques via GitHub Actions à chaque push, et réorganisation à venir de `lib/` par domaine (`lib/capture/`, `lib/export/`).
+
 ## 2026-09-28
 
 - Ajout de la capture vidéo (WebM) par écran en mode « par écrans » : durée et échelle réglables, simulation de survol (hover) sur les éléments interactifs détectés, et option pour filmer le scroll vers l'écran suivant plutôt que rester figé. Qualité alignée sur le choix standard/haute résolution des mockups (le deviceScaleFactor n'était pas propagé à la vidéo). Ré-encodage VP9 après capture pour corriger le bitrate bas imposé par défaut par Playwright.
