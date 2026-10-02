@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJob } from "@/lib/jobs";
-import { buildZip } from "@/lib/zip";
-import { convertImage, exportFilename, EXPORT_MIME_TYPES, type ExportFormat } from "@/lib/imageFormat";
+import { buildZip } from "@/lib/export/zip";
+import { convertImage, exportFilename, EXPORT_MIME_TYPES, type ExportFormat } from "@/lib/export/imageFormat";
 
 export const runtime = "nodejs";
 

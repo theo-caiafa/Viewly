@@ -7,7 +7,7 @@ import {
   type CaptureQuality,
   type DeviceConfig,
   type ScreenReplay,
-} from "@/lib/capture";
+} from "@/lib/capture/capture";
 import { createJob, updateJob, setProgress, getJob } from "@/lib/jobs";
 import { siteSlug } from "@/lib/siteSlug";
 

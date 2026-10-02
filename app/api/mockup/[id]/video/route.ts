@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJob } from "@/lib/jobs";
-import { getSharedBrowser } from "@/lib/browserManager";
-import { captureScreenVideo, type HoverPoint } from "@/lib/videoCapture";
-import { DEVICE_SCALE_FACTOR } from "@/lib/capture";
+import { getSharedBrowser } from "@/lib/capture/browserManager";
+import { captureScreenVideo, type HoverPoint } from "@/lib/capture/videoCapture";
+import { DEVICE_SCALE_FACTOR } from "@/lib/capture/capture";
 
 export const runtime = "nodejs";
 

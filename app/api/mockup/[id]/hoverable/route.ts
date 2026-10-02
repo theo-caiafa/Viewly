@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJob } from "@/lib/jobs";
-import { getSharedBrowser } from "@/lib/browserManager";
-import { listHoverableElements } from "@/lib/videoCapture";
+import { getSharedBrowser } from "@/lib/capture/browserManager";
+import { listHoverableElements } from "@/lib/capture/videoCapture";
 
 export const runtime = "nodejs";
 

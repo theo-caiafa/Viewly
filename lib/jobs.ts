@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import type { CaptureQuality, DeviceConfig, HttpCredentials, ScreenReplay } from "./capture";
+import type { CaptureQuality, DeviceConfig, HttpCredentials, ScreenReplay } from "./capture/capture";
 
 export type JobStatus = "running" | "done" | "error" | "cancelled";
 
