@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-02 (suite)
+
+- Ajout de tests unitaires pour `lib/jobs.ts` (store de jobs en mémoire) : création, lecture, mise à jour, annulation, progression, et expiration par TTL via les fake timers de Vitest.
+- Corrigé la race condition de `getSharedBrowser()` : si plusieurs requêtes concurrentes constataient simultanément un navigateur déconnecté, chacune relançait Chromium et écrasait la promesse partagée, abandonnant un process orphelin. Un identifiant de lancement garantit maintenant qu'une seule relance est déclenchée et que les autres attendent la même instance.
+- Re-testé en conditions réelles (capture par écrans, vidéo, détection de survol, export PNG/WebP/PDF/zip) après la réorganisation de `lib/` par domaine — aucune régression.
+
 ## 2026-10-02
 
 - Mise en œuvre de la décision "propre" du jour : réorganisation de `lib/` par domaine (`lib/capture/` pour capture.ts, browserManager.ts, cookieBanners.ts, videoCapture.ts ; `lib/export/` pour imageFormat.ts, pdf.ts, zip.ts — jobs.ts et siteSlug.ts restent à la racine), CI GitHub Actions (lint + build + test à chaque push/PR sur `main`), et premier test unitaire (`siteSlug.test.ts`) pour poser le pattern.
