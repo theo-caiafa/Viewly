@@ -59,7 +59,7 @@ flowchart LR
 
 | Symbole | Sens |
 |---|---|
-| 🔴 | Dépend de la recherche : ton, mots, promesse. À écrire après la réflexion sur le ton. |
+| 🔴 | Dépend de la recherche : ton, mots, promesse. À écrire après le user-test du ton. |
 | 🟡 | Le fond est fixe, la formulation dépend du ton. |
 | ⚪ | Fonctionnel, à geler dès que le design est stable. |
 | ⏳ | Fonctionnalité pas encore construite, slot à définir plus tard. |
