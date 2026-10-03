@@ -1,6 +1,6 @@
 # Viewly : structure du contenu UX writing
 
-> **Statut** : squelette de travail, 3 octobre 2026. **Aucun texte final.** On liste ce qu'il faudra écrire, pas les mots. Le ton et le glossaire viendront d'une réflexion dédiée.
+> **Statut** : squelette de travail, 3 octobre 2026. **Aucun texte final.** On liste ce qu'il faudra écrire, pas les mots. Le ton et le glossaire sont posés, à tester (user-test) avant de rédiger les textes finaux.
 >
 > **Copie Notion** : page "UX Writing : Structure du contenu". Si l'une des deux versions change, l'autre ne suit pas toute seule.
 
@@ -12,6 +12,7 @@
 - [Vue d'ensemble des pages](#vue-densemble-des-pages)
 - [Légende](#légende)
 - [Décisions prises](#décisions-prises)
+- [Ton et voix](#ton-et-voix)
 - [La hero en un coup d'œil](#la-hero-en-un-coup-dœil)
 - [Fiches des slots clés](#fiches-des-slots-clés)
 - [Landing](#landing)
@@ -19,7 +20,7 @@
 - [Résultat](#résultat)
 - [Panneau vidéo](#panneau-vidéo)
 - [Pages futures](#pages-futures)
-- [Glossaire provisoire](#glossaire-provisoire)
+- [Glossaire](#glossaire)
 - [Questions ouvertes](#questions-ouvertes)
 - [Prochaines étapes](#prochaines-étapes)
 
@@ -29,7 +30,7 @@
 
 > **Persona et besoin** : un designer ou développeur qui doit produire des visuels de présentation de ses sites (portfolio, réseaux sociaux, présentation client). Il veut un rendu **rapide, avec moins d'effort que la méthode manuelle**, en gardant le contrôle sur le format, la personnalisation et l'export.
 
-- **Limite assumée** : base de recherche secondaire, pas d'entretiens directs. Le vocabulaire réel des utilisateurs est peu connu, donc tout choix de mots reste provisoire.
+- **Limite assumée** : base de recherche secondaire, pas d'entretiens directs. Le vocabulaire réel des utilisateurs est peu connu, donc tout choix de mots reste à tester (user-test).
 
 - **Source** : page Notion "UX Research" (Discover & Define), à ne pas modifier depuis ce travail.
 
@@ -73,11 +74,34 @@ flowchart LR
 
 - **Ordre de lecture de la hero** : titre, sous-titre, source d'entrée, réglages, bouton.
 
-- **Vocabulaire** : on dit "mockup" (provisoire). Risque : chez les designers, le mot peut aussi désigner la maquette de l'interface.
+- **Vocabulaire** : on dit "mockup" (à tester). Risque : chez les designers, le mot peut aussi désigner la maquette de l'interface.
 
 - **Section "à venir"** sur la landing : oui, car les fonctionnalités sont développées en parallèle.
 
 - **Méthode** : fiche complète pour les slots clés seulement, une ligne pour les slots évidents.
+
+<br><br>
+
+## Ton et voix.
+
+> Ton posé le 3 octobre 2026, **à tester (user-test)** auprès de 3 à 5 designers ou développeurs avant de rédiger les textes finaux.
+
+En une phrase : un ton chaleureux, direct et sobre, qui vouvoie sans distance et laisse une touche d'esprit aux moments d'attente.
+
+| Dimension | Choix |
+|---|---|
+| Registre | Vouvoiement |
+| Humour | Léger, avec des limites (tableau suivant) |
+| Respect | Respectueux, sans irrévérence |
+| Émotion | Factuel : dit ce qui se passe, sans emphase |
+
+Où la légèreté s'applique :
+
+| Léger | Sobre |
+|---|---|
+| Titre, sous-titre, attente, confirmation du résultat | Erreurs, avertissements, libellés de réglages, aides, accessibilité |
+
+Les textes actuels de l'interface tutoient ("Colle", "Renseigne") : à reprendre au vouvoiement.
 
 <br><br>
 
@@ -230,17 +254,23 @@ Une page ajoutée = une section de plus dans ce document : bibliothèque de mock
 
 <br><br>
 
-## Glossaire provisoire.
+## Glossaire.
 
-| Terme retenu | À éviter | Statut |
-|---|---|---|
-| mockup | visuel de présentation, maquette, capture | provisoire, à valider |
+Tous les termes sont **à tester (user-test)** : ils viennent de nous, pas d'utilisateurs réels.
+
+| Terme retenu | Désigne | À éviter | Statut |
+|---|---|---|---|
+| mockup | Le rendu produit | visuel de présentation, maquette, capture | à tester |
+| source | Ce que l'utilisateur donne (URL, médias, Figma) | site, lien | à tester |
+| devices | Desktop, tablette et mobile pris ensemble | appareils, formats | à tester |
+| réglages | Mode, qualité, devices, accès protégé | paramètres, options | à tester |
+| générer | Lancer la création des mockups (famille de verbes du bouton) | créer, lancer | à tester |
 
 <br><br>
 
 ## Questions ouvertes.
 
-- Ton et voix : réflexion dédiée à faire (tutoiement ou vouvoiement, registre des erreurs).
+- User-test du ton et du glossaire auprès de 3 à 5 designers ou développeurs (le vouvoiement passe-t-il bien auprès d'un public technique ? les mots clés sont-ils ceux qu'ils emploient ?).
 
 - "URL" dans le titre ou le sous-titre ?
 
@@ -260,7 +290,7 @@ Une page ajoutée = une section de plus dans ce document : bibliothèque de mock
 
 2. Geler les slots ⚪ une fois le design stable.
 
-3. Réflexion dédiée sur le ton et le glossaire.
+3. User-test du ton et du glossaire (3 à 5 personnes de la cible).
 
 4. Rédiger les slots 🔴 et 🟡, puis fixer les longueurs maximales après les maquettes.
 

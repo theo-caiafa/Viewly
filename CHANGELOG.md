@@ -6,7 +6,8 @@
 - Décisions actées pour la structure UX writing : trois pages (landing avec hero et sections, chargement, résultat) ; réglages dans la hero, accessibles avant la génération ; source d'entrée traitée comme une famille de composants (URL, médias, Figma à venir) ; vocabulaire « mockup » (provisoire) ; section « à venir » sur la landing, mise à jour en parallèle du développement des fonctionnalités ; fiche complète pour les slots clés seulement, tableau pour le reste.
 - Mise en forme de `docs/ux-writing/structure.md` alignée sur la convention d'écriture (sommaire, schémas Mermaid, maquette de la hero).
 - Réécriture du `README.md` : schéma du pipeline, liste des fonctionnalités réellement présentes (modes de capture, devices, qualité, vidéo, export, sites protégés), prérequis, commandes, structure du projet, limites connues, roadmap (backlog UX research, puis détection de zones et variantes de layout, conservés tels quels) et liens vers la documentation.
-- Aucun changement de code. Ton et glossaire restent à définir avant toute rédaction.
+- Ton de voix posé (vouvoiement, léger sur titre/sous-titre/attente/résultat mais sobre sur erreurs/réglages/aides/accessibilité, respectueux, factuel) et glossaire de 5 termes (mockup, source, devices, réglages, générer), ajoutés à `docs/ux-writing/structure.md`. Statut « à tester (user-test) » : rien n'est figé avant un test auprès de 3 à 5 designers ou développeurs.
+- Aucun changement de code. Aucun texte final rédigé : les slots 🔴 et 🟡 attendent le user-test.
 
 ## 2026-10-02 (suite)
 
