@@ -228,6 +228,8 @@ flowchart LR
 | Erreur d'export | Cause + action. | 🟡 |
 | Lightbox | Aide à la fermeture. | 🟡 |
 | Recommencer | Lancer une nouvelle génération. Absent aujourd'hui. | 🟡 |
+| Mention de conservation | Dire que les résultats sont gardés dans cette fenêtre et perdus à sa fermeture. Essentiel : sans elle, du travail peut être perdu. Absent aujourd'hui. | 🟡 |
+| Stockage indisponible | Erreur quand le navigateur ne peut pas garder les résultats (stockage plein, navigation privée). Cause + action. | 🟡 |
 | État vide / aucun résultat | Cas où aucune image n'est produite. Absent aujourd'hui. | 🟡 |
 
 <br><br>
@@ -250,7 +252,22 @@ Disponible en mode "par écrans".
 
 ## Pages futures.
 
-Une page ajoutée = une section de plus dans ce document : bibliothèque de mockups, import par fichier, import Figma, personnalisation d'export. ⏳
+Une page ajoutée = une section de plus dans ce document : import par fichier, import Figma, personnalisation d'export, et la bibliothèque ci-dessous. ⏳
+
+### Bibliothèque
+
+Catalogue de **modèles prêts à l'emploi** (scènes, devices, layouts), gratuits et libres d'usage commercial. Ce n'est pas un espace où l'utilisateur retrouve ses générations : pas de compte, ses résultats restent dans son navigateur.
+
+| Slot | Rôle et contrainte | Dép. |
+|---|---|---|
+| Titre et introduction | Dire ce qu'on trouve ici (modèles prêts à l'emploi). | 🔴 |
+| Catégories | Scènes, devices, layouts. Libellés courts. | 🟡 |
+| Fiche d'un modèle | Nom, aperçu, courte description éventuelle. | 🟡 |
+| Licence d'usage | Dire que c'est gratuit et libre d'usage commercial. Slot sensible : à valider juridiquement avant de rédiger. | 🔴 |
+| Bouton pour utiliser un modèle | Appliquer le modèle à une génération. Action immédiate. | 🟡 |
+| Recherche ou filtre sans résultat | État vide. | 🟡 |
+
+> **Vigilance sur le vocabulaire** : dans le glossaire, "mockup" désigne le rendu produit. Dans la bibliothèque, les éléments sont des modèles (scène, cadre d'appareil, layout). Si les deux s'appellent "mockup", risque de confusion : un terme distinct est à choisir (modèle, scène, gabarit...) et à tester au second tour de user-test.
 
 <br><br>
 
@@ -279,6 +296,8 @@ Tous les termes sont **à tester (user-test)** : ils viennent de nous, pas d'uti
 - Où écrire les formats acceptés (zone de dépôt, aide) ?
 
 - Section "à venir" : qui met à jour le statut quand une fonctionnalité sort ?
+
+- Terme pour les éléments de la bibliothèque (modèle, scène, gabarit), distinct de "mockup" : à tester au second tour de user-test.
 
 - Proportion de lecteurs qui connaissent déjà l'outil et de ceux qui le découvrent (hypothèse non vérifiée).
 
