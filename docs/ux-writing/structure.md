@@ -1,15 +1,60 @@
 # Viewly : structure du contenu UX writing
 
-Statut : squelette de travail, 3 octobre 2026. **Aucun texte final.** On liste ce qu'il faudra écrire, pas les mots. Le ton et le glossaire viendront d'une réflexion dédiée.
+> **Statut** : squelette de travail, 3 octobre 2026. **Aucun texte final.** On liste ce qu'il faudra écrire, pas les mots. Le ton et le glossaire viendront d'une réflexion dédiée.
+>
+> **Copie Notion** : page "UX Writing : Structure du contenu". Si l'une des deux versions change, l'autre ne suit pas toute seule.
 
-## Base de travail
+<br><br>
 
-- **Persona** : designer ou développeur qui doit produire des visuels de présentation de ses sites (portfolio, réseaux sociaux, présentation client).
-- **Besoin** : produire ce rendu vite, avec moins d'effort que la méthode manuelle, en gardant le contrôle sur le format, la personnalisation et l'export.
-- **Limite assumée** : base de recherche secondaire, pas d'entretiens directs. Le vocabulaire réel des utilisateurs est donc peu connu. Tout choix de mots reste provisoire.
-- **Source** : page Notion "UX Research — Discover & Define" (à ne pas modifier depuis ce travail).
+## Sommaire
 
-## Légende
+- [Base de travail](#base-de-travail)
+- [Vue d'ensemble des pages](#vue-densemble-des-pages)
+- [Légende](#légende)
+- [Décisions prises](#décisions-prises)
+- [La hero en un coup d'œil](#la-hero-en-un-coup-dœil)
+- [Fiches des slots clés](#fiches-des-slots-clés)
+- [Landing](#landing)
+- [Chargement](#chargement)
+- [Résultat](#résultat)
+- [Panneau vidéo](#panneau-vidéo)
+- [Pages futures](#pages-futures)
+- [Glossaire provisoire](#glossaire-provisoire)
+- [Questions ouvertes](#questions-ouvertes)
+- [Prochaines étapes](#prochaines-étapes)
+
+<br><br>
+
+## Base de travail.
+
+> **Persona et besoin** : un designer ou développeur qui doit produire des visuels de présentation de ses sites (portfolio, réseaux sociaux, présentation client). Il veut un rendu **rapide, avec moins d'effort que la méthode manuelle**, en gardant le contrôle sur le format, la personnalisation et l'export.
+
+- **Limite assumée** : base de recherche secondaire, pas d'entretiens directs. Le vocabulaire réel des utilisateurs est peu connu, donc tout choix de mots reste provisoire.
+
+- **Source** : page Notion "UX Research" (Discover & Define), à ne pas modifier depuis ce travail.
+
+<br><br>
+
+## Vue d'ensemble des pages.
+
+Trois pages aujourd'hui, d'autres à venir. Chaque flèche est un moment où il faut un texte.
+
+```mermaid
+flowchart LR
+    A["Landing<br>hero + sections"] -->|"clic sur le bouton"| B["Chargement<br>progression"]
+    B -->|"succès"| C["Résultat<br>mockups + export"]
+    B -->|"erreur"| E["Message d'erreur<br>cause + action"]
+    B -->|"annulation"| F["Message d'annulation"]
+    E --> A
+    F --> A
+    C -->|"recommencer"| A
+```
+
+> Les retours vers la landing sont une hypothèse de structure, à confirmer au design.
+
+<br><br>
+
+## Légende.
 
 | Symbole | Sens |
 |---|---|
@@ -18,39 +63,92 @@ Statut : squelette de travail, 3 octobre 2026. **Aucun texte final.** On liste c
 | ⚪ | Fonctionnel, à geler dès que le design est stable. |
 | ⏳ | Fonctionnalité pas encore construite, slot à définir plus tard. |
 
-## Décisions prises
+<br><br>
 
-- Structure en 3 pages : **landing**, **chargement**, **résultat**. Des pages s'ajouteront (bibliothèque, import, personnalisation d'export).
-- Les réglages (mode, qualité, devices) sont dans la hero, près de l'URL, accessibles avant la génération.
-- Ordre de lecture de la hero : titre, sous-titre, source d'entrée, réglages, bouton de génération.
-- Vocabulaire : on dit **"mockup"** (provisoire). Risque : chez les designers, "mockup" peut aussi désigner la maquette de l'interface.
-- La landing montre une section **"à venir"** (sources supplémentaires), car les fonctionnalités sont développées en parallèle.
-- Méthode : on ne fait pas de fiche slot par slot. Fiches complètes seulement pour les slots clés, une ligne pour les évidents.
+## Décisions prises.
 
-## Fiches des slots clés
+- **Pages** : landing, chargement, résultat. Des pages s'ajouteront (bibliothèque, import, personnalisation d'export).
 
-**Bouton de génération (hero)**
-- Contexte : l'utilisateur vient d'arriver, il ne connaît pas encore l'outil.
-- Besoin : générer ses mockups sans perdre de temps (à vérifier).
-- Fonction : inciter à agir. Le contexte est porté par le titre et le sous-titre.
-- Contraintes : environ 1 mot, un seul état. Doit signaler une action immédiate, pas une navigation.
+- **Réglages** : dans la hero, près de la source, accessibles avant la génération.
 
-**Titre (hero)**
-- Contexte : première chose lue. Deux lecteurs : celui qui sait déjà (il confirme) et celui qui découvre (il comprend).
-- Fonction : identifier ce qu'est l'outil.
-- Contraintes : 2 lignes maximum, gros et impactant (taille au design). Doit parler de "mockup". Mentionner "URL" est fragile : les futures sources (fichiers, Figma) vont le périmer. À arbitrer.
+- **Ordre de lecture de la hero** : titre, sous-titre, source d'entrée, réglages, bouton.
 
-**Sous-titre (hero)**
-- Contexte : il a lu le titre et reste, parce qu'il découvre.
-- Fonction : motiver (gain de temps, moins d'effort, contrôle), sans répéter le titre.
-- Contraintes : 2 lignes maximum, concis.
+- **Vocabulaire** : on dit "mockup" (provisoire). Risque : chez les designers, le mot peut aussi désigner la maquette de l'interface.
 
-**Source d'entrée (hero)**
-- Contexte : il comprend vite ce qu'il doit donner. Il donne sa source d'abord, il règle ensuite.
-- Fonction : informer sur ce qu'on peut donner.
-- Contraintes : textes très courts. Le composant change selon la source : un lien affiche un placeholder qui montre le format attendu, des médias affichent une zone de dépôt avec un texte d'invitation. Les formats acceptés vont probablement dans la zone de dépôt (à confirmer au design).
+- **Section "à venir"** sur la landing : oui, car les fonctionnalités sont développées en parallèle.
 
-## Landing
+- **Méthode** : fiche complète pour les slots clés seulement, une ligne pour les slots évidents.
+
+<br><br>
+
+## La hero en un coup d'œil.
+
+Schéma de principe. Les mots entre crochets sont des rôles, pas des textes.
+
+```text
+┌──────────────────────────────────────────────────┐
+│  Navigation (nom du produit, liens d'ancre)      │
+│                                                  │
+│        TITRE (2 lignes max, gros)                │
+│        Sous-titre (2 lignes max)                 │
+│                                                  │
+│  Source :  [URL]  [Médias]  [Figma bientôt]      │
+│  ┌────────────────────────────────────────────┐  │
+│  │  Placeholder ou zone de dépôt              │  │
+│  └────────────────────────────────────────────┘  │
+│                                                  │
+│  Réglages :  Mode · Qualité · Devices · Accès    │
+│                                                  │
+│                   [ BOUTON ]                     │
+└──────────────────────────────────────────────────┘
+```
+
+Chaque texte a une fonction unique :
+
+```mermaid
+flowchart TB
+    T["1. Titre<br>identifier l'outil"] --> S["2. Sous-titre<br>motiver"] --> E["3. Source d'entrée<br>informer"] --> R["4. Réglages<br>libellés courts"] --> B["5. Bouton<br>inciter à agir"]
+```
+
+<br><br>
+
+## Fiches des slots clés.
+
+> **Titre (hero)**
+>
+> - **Contexte** : première chose lue. Deux lecteurs : celui qui connaît déjà l'outil (il confirme) et celui qui le découvre (il comprend).
+> - **Fonction** : identifier ce qu'est l'outil.
+> - **Contraintes** : 2 lignes maximum, gros et impactant (taille au design). Doit parler de "mockup". Citer "URL" est fragile : les futures sources (fichiers, Figma) vont le périmer. À arbitrer.
+
+> **Sous-titre (hero)**
+>
+> - **Contexte** : il a lu le titre et reste, parce qu'il découvre.
+> - **Fonction** : motiver (gain de temps, moins d'effort, contrôle), sans répéter le titre.
+> - **Contraintes** : 2 lignes maximum, concis.
+
+> **Source d'entrée (hero)**
+>
+> - **Contexte** : il comprend vite ce qu'il doit donner. Il donne sa source d'abord, il règle ensuite.
+> - **Fonction** : informer sur ce qu'on peut donner.
+> - **Contraintes** : textes très courts. Le composant change selon la source (schéma ci-dessous). Les formats acceptés vont probablement dans la zone de dépôt (à confirmer au design).
+
+```mermaid
+flowchart LR
+    BS["Boutons de source"] --> U["URL<br>champ + placeholder<br>(format attendu)"]
+    BS --> M["Médias<br>zone de dépôt<br>(invitation + formats)"]
+    BS --> F["Figma<br>lien ou connexion<br>(à définir)"]
+```
+
+> **Bouton de génération (hero)**
+>
+> - **Contexte** : l'utilisateur vient d'arriver, il ne connaît pas encore l'outil.
+> - **Besoin** : générer ses mockups sans perdre de temps (à vérifier).
+> - **Fonction** : inciter à agir. Le contexte est porté par le titre et le sous-titre.
+> - **Contraintes** : environ 1 mot, un seul état. Doit signaler une action immédiate, pas une navigation.
+
+<br><br>
+
+## Landing.
 
 | Slot | Rôle et contrainte | Dép. |
 |---|---|---|
@@ -72,12 +170,14 @@ Statut : squelette de travail, 3 octobre 2026. **Aucun texte final.** On liste c
 | Section comment ça marche | Titre de section + 3 étapes (source, réglages, résultat). | 🟡 |
 | Section usages | 1 bloc par usage : portfolio, réseaux sociaux, présentation client. | 🔴 |
 | Section contrôle | Formats et export (PNG, WebP, PDF, ZIP). | 🟡 |
-| Section à venir | Fonctionnalités annoncées. Pas de date. Statut : à venir / disponible / retiré. À mettre à jour avec le slot source quand une fonctionnalité sort. | 🔴 |
+| Section à venir | Fonctionnalités annoncées. Pas de date. Statut : à venir, disponible ou retiré. À mettre à jour avec le slot source quand une fonctionnalité sort. | 🔴 |
 | Section objections (FAQ) | Confidentialité, sites protégés, limites. | 🟡 |
 | Appel final | CTA de fin de page. | 🔴 |
 | Méta | Titre de l'onglet, description, favicon. | 🔴 |
 
-## Chargement
+<br><br>
+
+## Chargement.
 
 | Slot | Rôle et contrainte | Dép. |
 |---|---|---|
@@ -89,7 +189,9 @@ Statut : squelette de travail, 3 octobre 2026. **Aucun texte final.** On liste c
 | Erreurs de génération | Familles : site bloquant (anti-bot), échec générique, génération expirée, connexion perdue, erreurs techniques à reformuler (ex. ffmpeg). Cause + action possible. | 🟡 |
 | Erreur inconnue | Message de repli. | 🟡 |
 
-## Résultat
+<br><br>
+
+## Résultat.
 
 | Slot | Rôle et contrainte | Dép. |
 |---|---|---|
@@ -104,7 +206,11 @@ Statut : squelette de travail, 3 octobre 2026. **Aucun texte final.** On liste c
 | Recommencer | Lancer une nouvelle génération. Absent aujourd'hui. | 🟡 |
 | État vide / aucun résultat | Cas où aucune image n'est produite. Absent aujourd'hui. | 🟡 |
 
-## Panneau vidéo (mode "par écrans")
+<br><br>
+
+## Panneau vidéo.
+
+Disponible en mode "par écrans".
 
 | Slot | Rôle et contrainte | Dép. |
 |---|---|---|
@@ -116,29 +222,46 @@ Statut : squelette de travail, 3 octobre 2026. **Aucun texte final.** On liste c
 | Lancer la capture | Bouton + état de capture en cours. | 🟡 |
 | Résultat vidéo | Télécharger la vidéo, erreur vidéo. | 🟡 |
 
-## Pages futures
+<br><br>
+
+## Pages futures.
 
 Une page ajoutée = une section de plus dans ce document : bibliothèque de mockups, import par fichier, import Figma, personnalisation d'export. ⏳
 
-## Glossaire provisoire
+<br><br>
+
+## Glossaire provisoire.
 
 | Terme retenu | À éviter | Statut |
 |---|---|---|
 | mockup | visuel de présentation, maquette, capture | provisoire, à valider |
 
-## Questions ouvertes
+<br><br>
+
+## Questions ouvertes.
 
 - Ton et voix : réflexion dédiée à faire (tutoiement ou vouvoiement, registre des erreurs).
+
 - "URL" dans le titre ou le sous-titre ?
+
 - Où écrire les aides de mode et qualité (survol, clic, landing) ?
+
 - Où écrire les formats acceptés (zone de dépôt, aide) ?
+
 - Section "à venir" : qui met à jour le statut quand une fonctionnalité sort ?
+
 - Proportion de lecteurs qui connaissent déjà l'outil et de ceux qui le découvrent (hypothèse non vérifiée).
 
-## Prochaines étapes
+<br><br>
 
-1. Relire ce tableau et corriger ce qui est faux.
+## Prochaines étapes.
+
+1. Relire ce document et corriger ce qui est faux.
+
 2. Geler les slots ⚪ une fois le design stable.
+
 3. Réflexion dédiée sur le ton et le glossaire.
+
 4. Rédiger les slots 🔴 et 🟡, puis fixer les longueurs maximales après les maquettes.
+
 5. Tester les textes (test des 5 secondes sur la hero, test de rappel).

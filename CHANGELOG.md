@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-03
+
+- Ajout de `docs/ux-research.md` (résumé Discover/Define/Develop avec schémas Mermaid, en miroir de la page Notion complète) et de `docs/ux-writing/structure.md` (squelette du contenu UX writing : slots à écrire par page, sans texte final tant que le ton n'est pas tranché).
+- Décisions actées pour la structure UX writing : trois pages (landing avec hero et sections, chargement, résultat) ; réglages dans la hero, accessibles avant la génération ; source d'entrée traitée comme une famille de composants (URL, médias, Figma à venir) ; vocabulaire « mockup » (provisoire) ; section « à venir » sur la landing, mise à jour en parallèle du développement des fonctionnalités ; fiche complète pour les slots clés seulement, tableau pour le reste.
+- Mise en forme de `docs/ux-writing/structure.md` alignée sur la convention d'écriture (sommaire, schémas Mermaid, maquette de la hero).
+- Aucun changement de code. Ton et glossaire restent à définir avant toute rédaction.
+
 ## 2026-10-02 (suite)
 
 - Ajout de tests unitaires pour `lib/jobs.ts` (store de jobs en mémoire) : création, lecture, mise à jour, annulation, progression, et expiration par TTL via les fake timers de Vitest.
