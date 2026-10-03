@@ -7,6 +7,7 @@
 - Mise en forme de `docs/ux-writing/structure.md` alignée sur la convention d'écriture (sommaire, schémas Mermaid, maquette de la hero).
 - Réécriture du `README.md` : schéma du pipeline, liste des fonctionnalités réellement présentes (modes de capture, devices, qualité, vidéo, export, sites protégés), prérequis, commandes, structure du projet, limites connues, roadmap (backlog UX research, puis détection de zones et variantes de layout, conservés tels quels) et liens vers la documentation.
 - Ton de voix posé (vouvoiement, léger sur titre/sous-titre/attente/résultat mais sobre sur erreurs/réglages/aides/accessibilité, respectueux, factuel) et glossaire de 5 termes (mockup, source, devices, réglages, générer), ajoutés à `docs/ux-writing/structure.md`. Statut « à tester (user-test) » : rien n'est figé avant un test auprès de 3 à 5 designers ou développeurs.
+- Ajout de `docs/ux-writing/user-test.md` : formulaire de user-test (Google Forms) qui sert deux recherches à la fois, la recherche UX (pratiques réelles de présentation d'un site) et le test du glossaire et du registre. Ordre fixé pour ne pas influencer les réponses (profil, expérience, leurs mots, puis nos choix), questions rédigées sans « tu » ni « vous » sauf les messages d'exemple A/B. Formulaire envoyé, en attente des réponses.
 - Aucun changement de code. Aucun texte final rédigé : les slots 🔴 et 🟡 attendent le user-test.
 
 ## 2026-10-02 (suite)
