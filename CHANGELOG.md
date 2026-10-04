@@ -4,6 +4,7 @@
 
 - Ajout de `docs/ux-writing/progression.md` : inventaire de la progression (ce que fait le serveur pendant une génération, ce que l'utilisateur voit, sans message rédigé). Constat principal : trois des cinq étapes réelles (démarrage, ouverture du site, préparation de la page) sont confondues sous un seul libellé « chargement », aucune progression n'est affichée en vue complète, le compteur d'écrans part de 0 et un seul avertissement reste visible.
 - Décisions actées sur la progression : un seul indicateur global (sans détail par device), des étapes nommées (ouverture du site, préparation de la page, capture des écrans n sur N, finalisation), tous les avertissements distincts en liste, noms de devices affichés dans les avertissements, compteur d'écrans qui commence à 1. Ces choix demandent des signaux supplémentaires côté serveur.
+- Ajout de fichiers de contexte pour reprendre le travail sur un autre PC : `CLAUDE.md` (façon de travailler, règles du produit, garde-fous entre conversations) et `docs/contexte/` avec un fichier par thème (dev, UX research, UX writing, UI design). Le contenu vient des conversations existantes ; la partie UI design reprend les messages du 27-28 septembre et reste à vérifier avec le Figma actuel.
 - Aucun changement de code. Aucun texte final rédigé.
 
 ## 2026-10-03
