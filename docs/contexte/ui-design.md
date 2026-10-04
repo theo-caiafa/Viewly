@@ -1,53 +1,69 @@
 # Contexte : UI Design
 
-> Mis à jour le 4 octobre 2026, à partir de la conversation UI Design du 27 au 28 septembre. **À vérifier avec le fichier Figma actuel** : la dernière activité de cette conversation date du 28 septembre, et le design a pu évoluer depuis.
+> Mis à jour le 4 octobre 2026. **Décision du 4 octobre : le visuel est refait entièrement, de zéro.** Les propositions Landing1 à Landing7 du Figma sont oubliées. L'historique des anciens choix ci-dessous sert de mémoire, pas de contrainte.
 
 ## Principe.
 
-Théo refait **entièrement** le visuel de l'interface. Le contenu texte vient de l'UX writing (`docs/contexte/ux-writing.md`), pas du design. Les textes présents dans les maquettes sont donc provisoires.
+Théo refait **entièrement** le visuel de l'interface, y compris l'identité. Le contenu texte vient de l'UX writing (`docs/contexte/ux-writing.md`), pas du design. Les textes dans les maquettes sont provisoires.
+
+<br><br>
+
+## Méthode proposée.
+
+Adaptée du process UI/UX du vault (`process-ui-ux-pro-de-l-idee-au-handoff`, pas encore éprouvé).
+
+| # | Étape | Livrable | État |
+|---|---|---|---|
+| 1 | Plan du site, parcours, fonctionnalités | [docs/plan-du-site.md](../plan-du-site.md) | Fait |
+| 2 | **Identité** : personnalité de marque, références, logo, couleurs, typographies, validation sur 2 écrans clés | Identité v1 | À faire |
+| 3 | **Design system** : couleurs, typographies, espacements, composants, états, variables Figma | Design system v1 | À faire |
+| 4 | Pages : landing, chargement, résultat, puis bibliothèque | Maquettes | À faire |
+| 5 | Test : test des 5 secondes sur la landing, formulaire | Retours | À faire |
+
+La liste des composants à dessiner est dans `docs/plan-du-site.md` (section "Composants à prévoir").
 
 <br><br>
 
 ## Figma.
 
-- Fichier : [Viewly](https://www.figma.com/design/F8110cY9OFBXE6qFw7rhuU/Viewly)
+- Fichier : [Viewly](https://www.figma.com/design/F8110cY9OFBXE6qFw7rhuU/Viewly). À créer ou repartir d'une page vide pour la nouvelle version.
 
-- Méthode : **une duplication de frame par proposition** (Landing5, Landing6...) pour itérer sans écraser. Landing6 sert de base pour les pages suivantes. Landing7 a été essayée puis abandonnée.
+- Méthode de travail : **une duplication de frame par proposition** pour itérer sans écraser.
 
-- Respecter la méthode de Théo pour l'auto layout et les textes, telle qu'elle apparaît dans la hero.
-
-<br><br>
-
-## Choix de design connus.
-
-- **Couleur** : un orange, choisi par Théo (`F76927`). Il doit avoir un sens, pas être décoratif.
-
-- **Typographie** : Onest. Pas de grotesque. Letter spacing à 0 %. Tailles de texte très contrastées et contraste sur les mots du sous-titre.
-
-- **À éviter** : un gros bloc noir dans la page, un fond de motif, des boutons de type "générer en…" (ça fait "trop IA"), des fonds gris foncé sur les boutons, trop de boutons noirs répétés.
-
-- **Navigation** : logo centré, accès à la bibliothèque. Pas de tarifs, pas de connexion.
-
-- **Landing** : la page met en avant l'usage de l'outil directement, sans discours vendeur. Le champ URL est dans la hero, et les réglages doivent y être accessibles.
-
-- **Résolutions** : un menu déroulant avec les presets, et la possibilité de modifier les nombres à la main. Une icône de menu sur chaque bouton de résolution.
-
-- **Sections** : une section sur la vidéo ("faire bouger les écrans"), une section sur la bibliothèque de modèles. Les fonctionnalités présentées doivent être homogènes, de même longueur.
+- Respecter la méthode de Théo pour l'auto layout et les textes.
 
 <br><br>
 
-## Pages de génération.
+## Contraintes qui restent valables.
 
-- La génération ouvre une **nouvelle page**. L'état de chargement disparaît et laisse place au résultat quand la génération est finie.
+- Pas de compte, pas de connexion, pas de tarifs.
 
-- Sur le résultat : un bouton **vidéo** à côté de "télécharger", avec un contraste qui met "télécharger" davantage en avant. La fonctionnalité vidéo est encore en phase de test.
+- La landing met en avant l'usage de l'outil directement, sans discours vendeur. Le champ et les réglages sont dans la hero.
 
-- Un menu de format d'export (PNG, WebP, PDF) qui pilote les téléchargements individuels et le zip.
+- Résolutions : un menu déroulant avec les presets, et la possibilité de modifier les nombres à la main.
+
+- La génération ouvre une nouvelle page. Le chargement laisse place au résultat.
+
+- Sur le résultat : un bouton vidéo à côté de "télécharger", avec "télécharger" davantage mis en avant. La vidéo est encore en test.
+
+- Ton de l'interface (à tester) : chaleureux, direct, sobre.
+
+<br><br>
+
+## Anciens goûts de Théo (27-28 septembre, à reconsidérer).
+
+- Une couleur orange (`F76927`) qui doit avoir un sens, la police Onest, pas de grotesque, letter spacing à 0 %.
+
+- À éviter : un gros bloc noir, un fond de motif, des boutons de type "générer en…" (trop IA), des fonds gris foncé sur les boutons, trop de boutons noirs répétés.
+
+- Navigation : logo centré, accès à la bibliothèque.
 
 <br><br>
 
 ## Questions ouvertes.
 
-- Faut-il un label sur le bouton vidéo pour dire à quoi il sert ?
+- Quelle personnalité de marque (3 ou 4 adjectifs) ?
 
-- Quel contenu mettre dans les exemples de mockups de la landing (un vrai design, de quel site) ? Reporté à plus tard, quand le site sera fini.
+- Faut-il un label sur le bouton vidéo ?
+
+- Quel site montrer comme exemple de résultat dans la landing ? Reporté à quand le site sera fini.
