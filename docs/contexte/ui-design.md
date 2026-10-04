@@ -32,6 +32,8 @@ La liste des composants à dessiner est dans `docs/plan-du-site.md` (section "Co
 
 - Respecter la méthode de Théo pour l'auto layout et les textes.
 
+- **Chaque élément texte créé dans Figma doit avoir son propre frame auto layout dédié, rien que pour lui.** Ne pas se contenter qu'un ancêtre plus haut dans la hiérarchie ait de l'auto layout : le texte a besoin de SON frame auto layout individuel comme parent direct, même si ce texte vit déjà dans une zone qui a par ailleurs de l'auto layout (ex. une ligne de swatches). Un texte ne doit jamais partager son frame parent direct avec d'autres éléments (swatches, icônes, autres textes).
+
 <br><br>
 
 ## Contraintes qui restent valables.
@@ -50,6 +52,18 @@ La liste des composants à dessiner est dans `docs/plan-du-site.md` (section "Co
 
 <br><br>
 
+## Identité v1 — décisions prises (4 octobre).
+
+- **Personnalité de marque** : direct, confiant, net, accessible.
+
+- **Couleur de marque** : bleu, seule couleur de marque, décliné en échelle de nuances (pas de couleur secondaire). Base approximative `#2F7FFF`, à ajuster à la main. Le bleu apparaît en dégradé fort en haut du hero, qui s'estompe vers le bas pour faire ressortir la barre de recherche. Le reste de la page reste clair et aéré.
+
+- **Palette complète posée dans Figma** (page "Identité Visuel", fichier Viewly) : bleu et gris en échelle de 11 paliers (50 à 950, usage large sur toute l'interface), vert (succès), rouge (erreur), orange (avertissement) en échelle réduite à 5 paliers (100, 200, 500, 600, 700), chacun en variables Figma liées aux swatches.
+
+- **Typographie** : Onest pour les titres, Inter pour le corps de texte (labels, paragraphes, boutons).
+
+<br><br>
+
 ## Anciens goûts de Théo (27-28 septembre, à reconsidérer).
 
 - Une couleur orange (`F76927`) qui doit avoir un sens, la police Onest, pas de grotesque, letter spacing à 0 %.
@@ -61,8 +75,6 @@ La liste des composants à dessiner est dans `docs/plan-du-site.md` (section "Co
 <br><br>
 
 ## Questions ouvertes.
-
-- Quelle personnalité de marque (3 ou 4 adjectifs) ?
 
 - Faut-il un label sur le bouton vidéo ?
 
