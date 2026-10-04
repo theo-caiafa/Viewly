@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-04
+
+- Ajout de `docs/ux-writing/progression.md` : inventaire de la progression (ce que fait le serveur pendant une génération, ce que l'utilisateur voit, sans message rédigé). Constat principal : trois des cinq étapes réelles (démarrage, ouverture du site, préparation de la page) sont confondues sous un seul libellé « chargement », aucune progression n'est affichée en vue complète, le compteur d'écrans part de 0 et un seul avertissement reste visible.
+- Décisions actées sur la progression : un seul indicateur global (sans détail par device), des étapes nommées (ouverture du site, préparation de la page, capture des écrans n sur N, finalisation), tous les avertissements distincts en liste, noms de devices affichés dans les avertissements, compteur d'écrans qui commence à 1. Ces choix demandent des signaux supplémentaires côté serveur.
+- Aucun changement de code. Aucun texte final rédigé.
+
 ## 2026-10-03
 
 - Ajout de `docs/ux-research.md` (résumé Discover/Define/Develop avec schémas Mermaid, en miroir de la page Notion complète) et de `docs/ux-writing/structure.md` (squelette du contenu UX writing : slots à écrire par page, sans texte final tant que le ton n'est pas tranché).
