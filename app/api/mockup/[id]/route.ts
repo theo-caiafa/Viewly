@@ -11,9 +11,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 
   // sourceContext carries httpCredentials and internal replay recipes —
-  // server-only, never sent to the client.
-  const { sourceContext: _sourceContext, ...publicJob } = job;
-  return NextResponse.json(publicJob);
+  // server-only, never sent to the client. Its presence/absence tells the
+  // client whether this job has a live site to re-navigate to (e.g.
+  // imported media doesn't), which is what gates the video capture button.
+  const { sourceContext, ...publicJob } = job;
+  return NextResponse.json({ ...publicJob, hasSourceContext: !!sourceContext });
 }
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

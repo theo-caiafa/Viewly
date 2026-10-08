@@ -21,6 +21,7 @@ interface JobPayload {
   warning?: string;
   error?: string;
   images?: MockupResult[];
+  hasSourceContext?: boolean;
 }
 
 type ExportFormat = "png" | "webp" | "pdf";
@@ -33,6 +34,7 @@ const EXPORT_FORMATS: { value: ExportFormat; label: string }[] = [
 type Mode = "full" | "sections";
 type Quality = "standard" | "high";
 type DeviceId = "desktop" | "tablet" | "mobile";
+type InputMode = "url" | "media";
 
 const DEVICE_LABELS: Record<string, string> = {
   desktop: "Desktop",
@@ -69,6 +71,57 @@ const RESOLUTION_PRESETS: Record<DeviceId, ResolutionOption[]> = {
 
 function defaultPresetLabel(id: DeviceId): string {
   return RESOLUTION_PRESETS[id][0].label;
+}
+
+// Mirrors lib/import/media.ts — duplicated rather than imported because
+// that module pulls in sharp, which must stay out of the client bundle.
+const MEDIA_ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const MEDIA_MAX_FILE_BYTES = 20 * 1024 * 1024;
+const MEDIA_MAX_FILES = 10;
+const DEVICE_RATIO_TOLERANCE = 0.08;
+
+interface StagedMediaFile {
+  id: string;
+  file: File;
+  width: number;
+  height: number;
+  device: DeviceId | "";
+  error?: string;
+}
+
+// Guesses a device from the image's aspect ratio against every known
+// preset (not just the default size per device) — a ratio match within
+// tolerance picks the closest device; nothing close enough leaves it to be
+// chosen manually.
+function classifyDeviceId(width: number, height: number): DeviceId | null {
+  const ratio = width / height;
+  let best: { id: DeviceId; diff: number } | null = null;
+  for (const id of DEVICE_ORDER) {
+    for (const preset of RESOLUTION_PRESETS[id]) {
+      const presetRatio = preset.width / preset.height;
+      const diff = Math.abs(ratio - presetRatio) / presetRatio;
+      if (diff <= DEVICE_RATIO_TOLERANCE && (!best || diff < best.diff)) {
+        best = { id, diff };
+      }
+    }
+  }
+  return best?.id ?? null;
+}
+
+function readImageDimensions(file: File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      URL.revokeObjectURL(objectUrl);
+    };
+    img.onerror = () => {
+      reject(new Error("Fichier illisible."));
+      URL.revokeObjectURL(objectUrl);
+    };
+    img.src = objectUrl;
+  });
 }
 
 const DURATION_PRESETS_MS = [3000, 5000, 8000, 15000];
@@ -137,12 +190,24 @@ export default function Home() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
+  const [inputMode, setInputMode] = useState<InputMode>("url");
+  const [stagedFiles, setStagedFiles] = useState<StagedMediaFile[]>([]);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [mediaImportError, setMediaImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "running" | "done" | "error" | "cancelled">("idle");
   const [progress, setProgress] = useState<JobProgressEntry[]>([]);
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [images, setImages] = useState<MockupResult[]>([]);
+  const [hasSourceContext, setHasSourceContext] = useState(true);
+  // Tracks which flow produced the current results — a media-imported
+  // image must never inherit the "vue complète" scroll-clamp below, since
+  // that's governed by the URL capture's leftover `mode` state, which is
+  // meaningless for an uploaded file.
+  const [resultsSource, setResultsSource] = useState<InputMode>("url");
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
   const [exportingLabel, setExportingLabel] = useState<string | null>(null);
@@ -206,6 +271,7 @@ export default function Home() {
 
       if (data.status === "done") {
         setImages(data.images ?? []);
+        setHasSourceContext(data.hasSourceContext ?? true);
         setStatus("done");
         stopPolling();
       } else if (data.status === "error") {
@@ -237,6 +303,7 @@ export default function Home() {
     setWarning(null);
     setProgress([]);
     setImages([]);
+    setResultsSource("url");
     setJobId(null);
     setVideoPanelOpenFor(null);
     setVideoResults({});
@@ -266,6 +333,127 @@ export default function Home() {
           password: showAuth ? password : undefined,
         }),
       });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Erreur inconnue.");
+      }
+
+      setJobId(data.jobId);
+      pollRef.current = setInterval(() => pollJob(data.jobId), POLL_INTERVAL_MS);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur inconnue.");
+      setStatus("error");
+    }
+  }
+
+  async function addMediaFiles(fileList: FileList | File[]) {
+    const incoming = Array.from(fileList);
+    setMediaImportError(null);
+
+    const room = MEDIA_MAX_FILES - stagedFiles.length;
+    const kept = incoming.slice(0, Math.max(room, 0));
+    if (incoming.length > kept.length) {
+      setMediaImportError(
+        `Maximum ${MEDIA_MAX_FILES} fichiers par import — ${incoming.length - kept.length} fichier(s) ignoré(s).`,
+      );
+    }
+
+    for (const file of kept) {
+      const id = crypto.randomUUID();
+
+      if (!MEDIA_ACCEPTED_TYPES.includes(file.type)) {
+        setStagedFiles((prev) => [...prev, { id, file, width: 0, height: 0, device: "", error: "Format non supporté." }]);
+        continue;
+      }
+      if (file.size > MEDIA_MAX_FILE_BYTES) {
+        setStagedFiles((prev) => [
+          ...prev,
+          { id, file, width: 0, height: 0, device: "", error: "Fichier trop volumineux (max 20 Mo)." },
+        ]);
+        continue;
+      }
+
+      try {
+        const { width, height } = await readImageDimensions(file);
+        const guess = classifyDeviceId(width, height);
+        setStagedFiles((prev) => [...prev, { id, file, width, height, device: guess ?? "" }]);
+      } catch {
+        setStagedFiles((prev) => [...prev, { id, file, width: 0, height: 0, device: "", error: "Fichier illisible." }]);
+      }
+    }
+  }
+
+  function removeStagedFile(id: string) {
+    setStagedFiles((prev) => prev.filter((f) => f.id !== id));
+  }
+
+  function setStagedFileDevice(id: string, device: DeviceId) {
+    setStagedFiles((prev) => prev.map((f) => (f.id === id ? { ...f, device } : f)));
+  }
+
+  // dragenter/dragleave fire repeatedly while the pointer crosses child
+  // elements, not just the page boundary — a counter (rather than a plain
+  // boolean) is what keeps the "dragging a file" state from flickering off
+  // every time the cursor passes over a nested element.
+  const dragCounterRef = useRef(0);
+
+  function handlePageDragEnter(event: React.DragEvent) {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    dragCounterRef.current += 1;
+    setIsDraggingFile(true);
+  }
+
+  function handlePageDragOver(event: React.DragEvent) {
+    if (event.dataTransfer.types.includes("Files")) {
+      event.preventDefault();
+    }
+  }
+
+  function handlePageDragLeave(event: React.DragEvent) {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+    if (dragCounterRef.current === 0) setIsDraggingFile(false);
+  }
+
+  function handlePageDrop(event: React.DragEvent) {
+    event.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDraggingFile(false);
+    if (event.dataTransfer.files.length === 0) return;
+    setInputMode("media");
+    addMediaFiles(event.dataTransfer.files);
+  }
+
+  const readyMediaFiles = stagedFiles.filter((f) => !f.error && f.device);
+
+  async function handleMediaImport() {
+    if (readyMediaFiles.length === 0) return;
+
+    setStatus("running");
+    setError(null);
+    setWarning(null);
+    setProgress([]);
+    setImages([]);
+    setResultsSource("media");
+    setJobId(null);
+    setVideoPanelOpenFor(null);
+    setVideoResults({});
+    setVideoError(null);
+    setScrollToNext({});
+    setHoverElements({});
+    setHoverElementId({});
+    setExportError(null);
+
+    const formData = new FormData();
+    for (const staged of readyMediaFiles) {
+      formData.append("file", staged.file);
+      formData.append("device", staged.device);
+    }
+
+    try {
+      const response = await fetch("/api/mockup/media", { method: "POST", body: formData });
       const data = await response.json();
 
       if (!response.ok) {
@@ -418,7 +606,20 @@ export default function Home() {
   const isRunning = status === "running";
 
   return (
-    <div className="min-h-screen bg-zinc-50 px-6 py-16 dark:bg-black">
+    <div
+      onDragEnter={handlePageDragEnter}
+      onDragOver={handlePageDragOver}
+      onDragLeave={handlePageDragLeave}
+      onDrop={handlePageDrop}
+      className="min-h-screen bg-zinc-50 px-6 py-16 dark:bg-black"
+    >
+      {isDraggingFile && (
+        <div className="pointer-events-none fixed inset-4 z-50 flex items-center justify-center rounded-2xl border-2 border-dashed border-zinc-400 bg-zinc-50/90 dark:border-zinc-500 dark:bg-black/90">
+          <p className="text-lg font-medium text-zinc-700 dark:text-zinc-200">
+            Déposez vos fichiers pour les importer
+          </p>
+        </div>
+      )}
       <main className="mx-auto flex max-w-5xl flex-col gap-10">
         <div className="text-center">
           <h1 className="text-3xl font-semibold tracking-tight text-black dark:text-zinc-50">
@@ -431,169 +632,285 @@ export default function Home() {
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <input
-                type="text"
-                required
-                placeholder="https://exemple.com"
-                value={url}
-                onChange={(e) => {
-                  setUrl(e.target.value);
-                  if (urlError) setUrlError(null);
-                }}
-                className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              />
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-zinc-600 dark:text-zinc-400">Source :</span>
+            <div className="inline-flex rounded-lg border border-zinc-300 p-0.5 dark:border-zinc-700">
               <button
-                type="submit"
-                disabled={isRunning}
-                className="rounded-lg bg-black px-6 py-3 font-medium text-white transition-colors hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                type="button"
+                onClick={() => setInputMode("url")}
+                className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                  inputMode === "url"
+                    ? "bg-black text-white dark:bg-white dark:text-black"
+                    : "text-zinc-600 dark:text-zinc-400"
+                }`}
               >
-                {isRunning ? "Génération..." : "Générer les mockups"}
+                URL
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputMode("media")}
+                className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                  inputMode === "media"
+                    ? "bg-black text-white dark:bg-white dark:text-black"
+                    : "text-zinc-600 dark:text-zinc-400"
+                }`}
+              >
+                Média
               </button>
             </div>
-            {urlError && <p className="text-xs text-red-600 dark:text-red-400">{urlError}</p>}
           </div>
 
-          <div className="flex flex-col gap-4 text-sm sm:flex-row sm:items-center sm:gap-8">
-            <fieldset className="flex items-center gap-3">
-              <legend className="sr-only">Mode de capture</legend>
-              <span className="text-zinc-600 dark:text-zinc-400">Mode :</span>
-              <label className="flex items-center gap-1.5">
-                <input
-                  type="radio"
-                  name="mode"
-                  checked={mode === "full"}
-                  onChange={() => setMode("full")}
-                />
-                Vue complète
-              </label>
-              <label className="flex items-center gap-1.5">
-                <input
-                  type="radio"
-                  name="mode"
-                  checked={mode === "sections"}
-                  onChange={() => setMode("sections")}
-                />
-                Par écrans
-              </label>
-            </fieldset>
-
-            <fieldset className="flex items-center gap-3">
-              <legend className="sr-only">Qualité</legend>
-              <span className="text-zinc-600 dark:text-zinc-400">Qualité :</span>
-              <label className="flex items-center gap-1.5">
-                <input
-                  type="radio"
-                  name="quality"
-                  checked={quality === "standard"}
-                  onChange={() => setQuality("standard")}
-                />
-                Standard
-              </label>
-              <label className="flex items-center gap-1.5">
-                <input
-                  type="radio"
-                  name="quality"
-                  checked={quality === "high"}
-                  onChange={() => setQuality("high")}
-                />
-                Haute qualité
-              </label>
-            </fieldset>
-          </div>
-
-          <fieldset className="flex flex-col gap-3 text-sm">
-            <legend className="text-zinc-600 dark:text-zinc-400">Devices :</legend>
-            {DEVICE_ORDER.map((id) => (
-              <div key={id} className="flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-1.5">
+          <div className="flex flex-col gap-1 rounded-lg">
+            {inputMode === "url" ? (
+              <>
+                <div className="flex flex-col gap-3 sm:flex-row">
                   <input
-                    type="checkbox"
-                    checked={devices.has(id)}
-                    onChange={() => toggleDevice(id)}
+                    type="text"
+                    required
+                    placeholder="https://exemple.com"
+                    value={url}
+                    onChange={(e) => {
+                      setUrl(e.target.value);
+                      if (urlError) setUrlError(null);
+                    }}
+                    className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
                   />
-                  {DEVICE_LABELS[id]}
-                </label>
+                  <button
+                    type="submit"
+                    disabled={isRunning}
+                    className="rounded-lg bg-black px-6 py-3 font-medium text-white transition-colors hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                  >
+                    {isRunning ? "Génération..." : "Générer les mockups"}
+                  </button>
+                </div>
+                {urlError && <p className="text-xs text-red-600 dark:text-red-400">{urlError}</p>}
+              </>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-zinc-300 bg-white px-4 py-8 text-center dark:border-zinc-700 dark:bg-zinc-900">
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                    Glissez vos images ici (maquettes, screenshots)
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                  >
+                    Parcourir
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files) addMediaFiles(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
 
-                {devices.has(id) && (
-                  <span className="flex items-center gap-2">
-                    <select
-                      value={resolutionChoice[id]}
-                      onChange={(e) => setResolutionChoice((prev) => ({ ...prev, [id]: e.target.value }))}
-                      className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    >
-                      {RESOLUTION_PRESETS[id].map((preset) => (
-                        <option key={preset.label} value={preset.label}>
-                          {preset.label}
-                        </option>
-                      ))}
-                      <option value="custom">Personnalisé</option>
-                    </select>
-                    {resolutionChoice[id] === "custom" && (
-                      <>
-                        <input
-                          type="number"
-                          min={200}
-                          max={3840}
-                          value={customSize[id].width}
-                          onChange={(e) =>
-                            setCustomSize((prev) => ({
-                              ...prev,
-                              [id]: { ...prev[id], width: Number(e.target.value) },
-                            }))
-                          }
-                          className="w-20 rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                        />
-                        ×
-                        <input
-                          type="number"
-                          min={200}
-                          max={3840}
-                          value={customSize[id].height}
-                          onChange={(e) =>
-                            setCustomSize((prev) => ({
-                              ...prev,
-                              [id]: { ...prev[id], height: Number(e.target.value) },
-                            }))
-                          }
-                          className="w-20 rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                        />
-                      </>
-                    )}
-                  </span>
+                {mediaImportError && <p className="text-xs text-red-600 dark:text-red-400">{mediaImportError}</p>}
+
+                {stagedFiles.length > 0 && (
+                  <ul className="flex flex-col gap-2">
+                    {stagedFiles.map((staged) => (
+                      <li
+                        key={staged.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800"
+                      >
+                        <span className="truncate text-zinc-800 dark:text-zinc-200">{staged.file.name}</span>
+                        {staged.error ? (
+                          <span className="text-xs text-red-600 dark:text-red-400">{staged.error}</span>
+                        ) : (
+                          <span className="flex items-center gap-2">
+                            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                              {staged.width}×{staged.height}
+                            </span>
+                            <select
+                              value={staged.device}
+                              onChange={(e) => setStagedFileDevice(staged.id, e.target.value as DeviceId)}
+                              className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                            >
+                              <option value="" disabled>
+                                Choisir un device...
+                              </option>
+                              {DEVICE_ORDER.map((id) => (
+                                <option key={id} value={id}>
+                                  {DEVICE_LABELS[id]}
+                                </option>
+                              ))}
+                            </select>
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeStagedFile(staged.id)}
+                          className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                        >
+                          Retirer
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              </div>
-            ))}
-          </fieldset>
 
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowAuth((v) => !v)}
-              className="text-xs text-zinc-500 underline underline-offset-2 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-            >
-              Site protégé par mot de passe ?
-            </button>
-            {showAuth && (
-              <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-                <input
-                  type="text"
-                  placeholder="Identifiant"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                />
-                <input
-                  type="password"
-                  placeholder="Mot de passe"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                />
+                <button
+                  type="button"
+                  onClick={handleMediaImport}
+                  disabled={readyMediaFiles.length === 0 || isRunning}
+                  className="self-start rounded-lg bg-black px-6 py-3 font-medium text-white transition-colors hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                >
+                  {isRunning ? "Import..." : `Importer (${readyMediaFiles.length})`}
+                </button>
               </div>
             )}
           </div>
+
+          {inputMode === "url" && (
+            <>
+              <div className="flex flex-col gap-4 text-sm sm:flex-row sm:items-center sm:gap-8">
+                <fieldset className="flex items-center gap-3">
+                  <legend className="sr-only">Mode de capture</legend>
+                  <span className="text-zinc-600 dark:text-zinc-400">Mode :</span>
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name="mode"
+                      checked={mode === "full"}
+                      onChange={() => setMode("full")}
+                    />
+                    Vue complète
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name="mode"
+                      checked={mode === "sections"}
+                      onChange={() => setMode("sections")}
+                    />
+                    Par écrans
+                  </label>
+                </fieldset>
+
+                <fieldset className="flex items-center gap-3">
+                  <legend className="sr-only">Qualité</legend>
+                  <span className="text-zinc-600 dark:text-zinc-400">Qualité :</span>
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name="quality"
+                      checked={quality === "standard"}
+                      onChange={() => setQuality("standard")}
+                    />
+                    Standard
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name="quality"
+                      checked={quality === "high"}
+                      onChange={() => setQuality("high")}
+                    />
+                    Haute qualité
+                  </label>
+                </fieldset>
+              </div>
+
+              <fieldset className="flex flex-col gap-3 text-sm">
+                <legend className="text-zinc-600 dark:text-zinc-400">Devices :</legend>
+                {DEVICE_ORDER.map((id) => (
+                  <div key={id} className="flex flex-wrap items-center gap-3">
+                    <label className="flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={devices.has(id)}
+                        onChange={() => toggleDevice(id)}
+                      />
+                      {DEVICE_LABELS[id]}
+                    </label>
+
+                    {devices.has(id) && (
+                      <span className="flex items-center gap-2">
+                        <select
+                          value={resolutionChoice[id]}
+                          onChange={(e) => setResolutionChoice((prev) => ({ ...prev, [id]: e.target.value }))}
+                          className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                        >
+                          {RESOLUTION_PRESETS[id].map((preset) => (
+                            <option key={preset.label} value={preset.label}>
+                              {preset.label}
+                            </option>
+                          ))}
+                          <option value="custom">Personnalisé</option>
+                        </select>
+                        {resolutionChoice[id] === "custom" && (
+                          <>
+                            <input
+                              type="number"
+                              min={200}
+                              max={3840}
+                              value={customSize[id].width}
+                              onChange={(e) =>
+                                setCustomSize((prev) => ({
+                                  ...prev,
+                                  [id]: { ...prev[id], width: Number(e.target.value) },
+                                }))
+                              }
+                              className="w-20 rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                            />
+                            ×
+                            <input
+                              type="number"
+                              min={200}
+                              max={3840}
+                              value={customSize[id].height}
+                              onChange={(e) =>
+                                setCustomSize((prev) => ({
+                                  ...prev,
+                                  [id]: { ...prev[id], height: Number(e.target.value) },
+                                }))
+                              }
+                              className="w-20 rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                            />
+                          </>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </fieldset>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowAuth((v) => !v)}
+                  className="text-xs text-zinc-500 underline underline-offset-2 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                >
+                  Site protégé par mot de passe ?
+                </button>
+                {showAuth && (
+                  <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                    <input
+                      type="text"
+                      placeholder="Identifiant"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                    />
+                    <input
+                      type="password"
+                      placeholder="Mot de passe"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                    />
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           {isRunning && (
             <div className="flex flex-col gap-2 rounded-lg border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-950">
@@ -686,7 +1003,7 @@ export default function Home() {
                           type="button"
                           onClick={() => setLightboxImage(image.dataUrl)}
                           className={`overflow-hidden rounded border border-zinc-100 dark:border-zinc-800 ${
-                            mode === "full" ? "max-h-80 overflow-y-auto" : ""
+                            resultsSource === "url" && mode === "full" ? "max-h-80 overflow-y-auto" : ""
                           }`}
                         >
                           <img
@@ -704,7 +1021,7 @@ export default function Home() {
                           {exportingLabel === image.label ? "Préparation..." : "Télécharger"}
                         </button>
 
-                        {mode === "sections" && (
+                        {mode === "sections" && hasSourceContext && (
                           <div className="flex flex-col gap-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
                             <button
                               type="button"

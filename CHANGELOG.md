@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-08
+
+- Première piste du backlog UX research : import direct d'images (maquettes, screenshots) en plus de l'URL. Toggle Source dans la hero, glisser-déposer sur toute la page (ou bouton Parcourir), multi-fichiers (max 10, 20 Mo/fichier, PNG/JPG/WebP), device deviné par ratio largeur/hauteur avec choix manuel si ambigu — rien n'est rejeté pour un ratio non standard. Images réencodées en PNG, même convention de labels que les captures, pas de bouton vidéo (pas de site réel à renavigeure).
+- Corrigé en cours de route : les images importées héritaient à tort du scroll pensé pour le mode "vue complète" côté URL.
+- Testé par build, lint, tests unitaires (`lib/import/media.ts`) et par l'API (curl) ; **pas encore vérifié dans un vrai navigateur** — checklist de vérification dans `docs/contexte/dev.md`.
+- Corrigé au passage une référence obsolète au sous-dossier `Viewly/Viewly` (le `package.json` est à la racine du dépôt depuis la réorganisation du 2 octobre) dans `docs/contexte/dev.md` et `docs/reprise/prompt-dev.md`.
+
 ## 2026-10-04
 
 - Ajout de `docs/ux-writing/progression.md` : inventaire de la progression (ce que fait le serveur pendant une génération, ce que l'utilisateur voit, sans message rédigé). Constat principal : trois des cinq étapes réelles (démarrage, ouverture du site, préparation de la page) sont confondues sous un seul libellé « chargement », aucune progression n'est affichée en vue complète, le compteur d'écrans part de 0 et un seul avertissement reste visible.

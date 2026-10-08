@@ -1,6 +1,6 @@
 # Contexte : Dev
 
-> Mis à jour le 4 octobre 2026, à partir des conversations Dev du 27 septembre au 2 octobre. L'état détaillé est dans le [CHANGELOG](../../CHANGELOG.md) et sur Notion ("Prochaines étapes", "Journal des décisions", "Architecture & stack technique").
+> Mis à jour le 8 octobre 2026, à partir des conversations Dev du 27 septembre au 8 octobre. L'état détaillé est dans le [CHANGELOG](../../CHANGELOG.md) et sur Notion ("Prochaines étapes", "Journal des décisions", "Architecture & stack technique").
 
 ## Périmètre.
 
@@ -28,7 +28,7 @@
 
 - Si Chromium manque : `npx playwright install chromium`.
 
-- Lancer les commandes depuis `Viewly/Viewly`.
+- Le `package.json` est à la racine du dépôt (plus de sous-dossier `Viewly/Viewly`) : lancer les commandes npm directement depuis la racine.
 
 <br><br>
 
@@ -43,6 +43,24 @@
 - Export PNG, WebP, PDF, zip adaptatif.
 
 - Abandonné : la détection automatique d'animations (trop de faux positifs) et le sélecteur d'élément.
+
+<br><br>
+
+## En cours : import de médias.
+
+Première piste du backlog UX research (priorité haute) : importer directement des images (maquettes, screenshots) plutôt que de passer uniquement par une URL. Code écrit et testé côté API (curl) et par build/lint/tests, **mais jamais vérifié dans un vrai navigateur** — pas encore committé.
+
+- Toggle Source (URL / Média) dans la hero. En mode Média : glisser-déposer (sur toute la page, pas juste la zone de recherche) ou bouton Parcourir, multi-fichiers (max 10, 20 Mo/fichier, PNG/JPG/WebP).
+- Device deviné par ratio largeur/hauteur contre les presets existants (`RESOLUTION_PRESETS`) ; si ambigu, choix manuel avant import. Rien n'est jamais rejeté pour un ratio non standard.
+- Images importées : toujours réencodées en PNG, mêmes labels `device-n` que les captures, pas de `sourceContext` (donc pas de bouton vidéo, le serveur l'interdit déjà via une erreur 410).
+- Bug trouvé et corrigé en cours de route : les images importées héritaient à tort du clamp "hauteur max + scroll" pensé pour le mode "vue complète" côté URL — un nouveau state `resultsSource` distingue maintenant d'où viennent les résultats affichés.
+
+**À vérifier avant de considérer la fonctionnalité terminée** (checklist pour la reprise) :
+1. Glisser-déposer n'importe où sur la page bascule en mode Média (pas seulement sur la barre de recherche).
+2. Déposer plusieurs fichiers de formats différents (desktop + mobile) assigne le bon device à chaque fichier.
+3. Un fichier au ratio non standard demande bien un choix manuel plutôt que d'être deviné à tort ou rejeté.
+4. Le bouton vidéo n'apparaît pas sur les images importées.
+5. Une image au format mobile s'affiche en entier, sans scroll, dans la galerie de résultats.
 
 <br><br>
 
