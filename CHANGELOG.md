@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-10
+
+- Design system Figma : composants fonctionnels supplémentaires (Résolution, Hero Input avec bascule Lien/Média et Qualité sur la même ligne, Chip, Dropdown, Numeric Field, Durée, Switch), prototype câblé (CHANGE_TO, overlays) et bibliothèque d'icônes recentrée sur la bounding box réelle des tracés.
+- Pages de chargement (`Viewly-Chargement`, `Viewly-Annulé`, `Viewly-Erreur`, `Viewly-Réussi`) auditées et corrigées : faute d'accord sur « annulée », bouton Retour ajouté, hiérarchie des boutons clarifiée (Primary pour Erreur, Ghost pour Annulé), écran Erreur distinct de l'annulation (contexte et nature de l'erreur précisés).
+- Page de résultat construite : mockups groupés par device, menu de format d'export, téléchargement groupé en zip, bouton vidéo par écran avec modale de réglages (durée, échelle, scroll, survol — valeurs alignées sur les constantes réelles de `app/page.tsx`), modale d'aperçu plein écran d'un mockup, recommencer.
+- Corrigé `docs/plan-du-site.md` : l'import de médias était encore listé « à venir », alors qu'il est fait et testé depuis le 2026-10-08 — passé à « Existe » dans le tableau et le schéma du parcours.
+
 ## 2026-10-08
 
 - Première piste du backlog UX research : import direct d'images (maquettes, screenshots) en plus de l'URL. Toggle Source dans la hero, glisser-déposer sur toute la page (ou bouton Parcourir), multi-fichiers (max 10, 20 Mo/fichier, PNG/JPG/WebP), device deviné par ratio largeur/hauteur avec choix manuel si ambigu — rien n'est rejeté pour un ratio non standard. Images réencodées en PNG, même convention de labels que les captures, pas de bouton vidéo (pas de site réel à renavigeure).

@@ -1,6 +1,6 @@
 # Viewly : plan du site, parcours et fonctionnalités
 
-> **Statut** : document de structure, 4 octobre 2026. Il dit **quoi dessiner** (pages, parcours, fonctionnalités, composants), pas comment ça se présente. Aucun texte d'interface, aucun choix visuel.
+> **Statut** : document de structure, 4 octobre 2026 (mis à jour le 10 octobre 2026 : import de médias passé à "Existe"). Il dit **quoi dessiner** (pages, parcours, fonctionnalités, composants), pas comment ça se présente. Aucun texte d'interface, aucun choix visuel.
 >
 > **Sources** : code actuel (`app/page.tsx`, API), `docs/ux-writing/*`, backlog UX research, règles du produit dans `CLAUDE.md`.
 
@@ -27,7 +27,8 @@ flowchart LR
     R -->|"recommencer"| L
     NAV -.-> B["Bibliothèque<br>à venir"]
     B -.->|"utiliser un modèle"| L
-    L -.-> I["Import de médias, Figma<br>à venir, dans la hero"]
+    L --> I["Import de médias<br>dans la hero"]
+    L -.-> IF["Import Figma<br>à venir, dans la hero"]
     R -.-> P["Personnalisation d'export<br>à venir"]
 ```
 
@@ -70,7 +71,7 @@ flowchart TB
 |---|---|---|
 | Source : URL d'un site | Existe | Landing (hero) |
 | Source : site protégé par identifiant et mot de passe | Existe | Landing (hero) |
-| Source : fichiers et médias divers | À venir (priorité haute) | Landing (hero) |
+| Source : fichiers et médias divers | Existe | Landing (hero) |
 | Source : import direct depuis Figma | À venir (priorité haute) | Landing (hero) |
 | Source : extension VS Code ou import de code | À venir (priorité moyenne) | À définir |
 | Mode de capture : vue complète ou par écrans | Existe | Landing (hero) |
